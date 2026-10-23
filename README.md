@@ -52,11 +52,16 @@ Edit **`config.json`**:
   "epgUrl": "",                  // optional XMLTV guide URL (see "TV guide" below)
   "import": {
     "enabled": true,             // false = use only your own CSV files
-    "countries": ["IN", "US", "GB"],  // ISO codes; [] = all countries (large!)
+    "countries": [],             // ISO codes, e.g. ["IN", "US"]; [] = every country
     "categories": [],            // e.g. ["news", "kids", "movies"]; [] = all
-    "excludeNsfw": true
+    "excludeNsfw": true,
+    "includeUnlinked": true      // also add iptv-org streams with no channel entry (only when unfiltered)
   },
-  "check": { "timeoutMs": 8000, "concurrency": 20, "dropDead": true }
+  "check": {
+    "timeoutMs": 10000, "concurrency": 60,
+    "dropDead": true,            // remove streams that fail the check
+    "keepBlocked": true          // keep 401/403 streams: GitHub checks from the US, so geo-blocked != dead
+  }
 }
 ```
 

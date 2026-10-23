@@ -3,13 +3,15 @@
   "epgUrl": "",
   "import": {
     "enabled": true,
-    "countries": ["IN", "US", "GB"],
+    "countries": [],
     "categories": [],
-    "excludeNsfw": true
+    "excludeNsfw": true,
+    "includeUnlinked": true
   },
   "check": {
-    "timeoutMs": 8000,
-    "concurrency": 20,
-    "dropDead": true
+    "timeoutMs": 10000,
+    "concurrency": 60,
+    "dropDead": true,
+    "keepBlocked": true
   }
 }

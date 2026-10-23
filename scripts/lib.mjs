@@ -96,6 +96,17 @@ export async function loadIptvOrg(opts) {
       source: 'iptv-org'
     })
   }
+  // Streams iptv-org hasn't linked to a channel have no country or category, so
+  // they are only included when nothing is being filtered on.
+  if (opts.includeUnlinked && !countries.size && !categories.size) {
+    for (const s of streams) {
+      if (s.channel || !s.title) continue
+      s.channel = `~${s.title}`
+      if (!picked.has(s.channel)) {
+        picked.set(s.channel, { id: s.channel, name: s.title, country: '', categories: [], languages: [], logo: null, website: null, unlinked: true, source: 'iptv-org' })
+      }
+    }
+  }
   const pickedStreams = streams
     .filter(s => s.channel && picked.has(s.channel))
     .map(s => ({
@@ -130,7 +141,7 @@ export function toM3u(entries, { epgUrl } = {}) {
   for (const { channel: c, stream: s } of entries) {
     const group = c.categories[0] ? c.categories[0][0].toUpperCase() + c.categories[0].slice(1) : 'Undefined'
     const title = s.quality ? `${c.name} (${s.quality})` : c.name
-    const attrs = [`tvg-id="${attr(c.id)}"`]
+    const attrs = [`tvg-id="${c.unlinked ? '' : attr(c.id)}"`]
     if (c.logo) attrs.push(`tvg-logo="${attr(c.logo)}"`)
     attrs.push(`group-title="${attr(group)}"`)
     lines.push(`#EXTINF:-1 ${attrs.join(' ')},${title}`)
@@ -147,7 +158,8 @@ export async function checkStream(s, timeoutMs) {
   if (s.referrer) headers['Referer'] = s.referrer
   try {
     const res = await fetch(s.url, { headers, redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) })
-    if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` }
+    // 401/403/451 usually mean geo-blocked from the checker's location, not dead.
+    if (!res.ok) return { ok: false, blocked: [401, 403, 451].includes(res.status), reason: `HTTP ${res.status}` }
     if (/\.m3u8?(\?|$)/i.test(s.url)) {
       const body = (await res.text()).slice(0, 200)
       if (!body.trimStart().startsWith('#EXTM3U')) return { ok: false, reason: 'not an HLS playlist' }

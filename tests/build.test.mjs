@@ -18,6 +18,16 @@ test('iptv-org import filters by country, closed and nsfw', async () => {
   assert.equal(r.streams.length, 2)
 })
 
+test('unlinked streams are included only without filters', async () => {
+  const all = await loadIptvOrg({ countries: [], categories: [], excludeNsfw: true, includeUnlinked: true })
+  const orphan = all.channels.find(c => c.name === 'Orphan')
+  assert.ok(orphan?.unlinked)
+  assert.ok(all.streams.some(s => s.channel === orphan.id))
+  assert.match(toM3u([{ channel: orphan, stream: { url: 'u' } }]), /tvg-id="" group-title="Undefined",Orphan/)
+  const filtered = await loadIptvOrg({ countries: ['IN'], categories: [], excludeNsfw: true, includeUnlinked: true })
+  assert.ok(!filtered.channels.some(c => c.unlinked))
+})
+
 test('local data overrides remote and duplicate URLs are dropped', async () => {
   const remote = await loadIptvOrg({ countries: [], categories: [], excludeNsfw: true })
   const { channels, streams } = merge(await loadLocal(), remote)
@@ -46,6 +56,7 @@ test('checkStream detects live, dead and bogus playlists', async () => {
   const server = http.createServer((req, res) => {
     if (req.url === '/live.m3u8') return res.end('#EXTM3U\n#EXT-X-VERSION:3\n')
     if (req.url === '/html.m3u8') return res.end('<html>blocked</html>')
+    if (req.url === '/geo.m3u8') { res.statusCode = 403; return res.end() }
     if (req.url === '/slow.m3u8') return setTimeout(() => res.end('#EXTM3U'), 500)
     res.statusCode = 404; res.end()
   })
@@ -53,7 +64,8 @@ test('checkStream detects live, dead and bogus playlists', async () => {
   const base = `http://127.0.0.1:${server.address().port}`
   const check = p => checkStream({ url: base + p }, 200)
   assert.deepEqual(await check('/live.m3u8'), { ok: true })
-  assert.deepEqual(await check('/gone.m3u8'), { ok: false, reason: 'HTTP 404' })
+  assert.deepEqual(await check('/gone.m3u8'), { ok: false, blocked: false, reason: 'HTTP 404' })
+  assert.deepEqual(await check('/geo.m3u8'), { ok: false, blocked: true, reason: 'HTTP 403' })
   assert.deepEqual(await check('/html.m3u8'), { ok: false, reason: 'not an HLS playlist' })
   assert.deepEqual(await check('/slow.m3u8'), { ok: false, reason: 'timeout' })
   server.closeAllConnections(); server.close()

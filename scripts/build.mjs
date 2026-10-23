@@ -18,15 +18,17 @@ const { channels, streams } = merge(local, remote)
 let live = streams
 
 if (args.has('--check')) {
-  const { timeoutMs = 8000, concurrency = 20, dropDead = true } = config.check || {}
+  const { timeoutMs = 8000, concurrency = 20, dropDead = true, keepBlocked = true } = config.check || {}
   console.log(`Checking ${streams.length} streams...`)
   const results = await pool(streams, concurrency, s => checkStream(s, timeoutMs))
-  const dead = streams.filter((_, i) => !results[i].ok)
+  const keep = (_, i) => results[i].ok || (keepBlocked && results[i].blocked)
+  const dead = streams.filter((s, i) => !keep(s, i))
   for (const s of dead.filter(s => s.source === 'local')) {
     console.warn(`  dead (local): ${s.channel} ${s.url} — ${results[streams.indexOf(s)].reason}`)
   }
-  console.log(`  ${streams.length - dead.length} online, ${dead.length} offline`)
-  if (dropDead) live = streams.filter((_, i) => results[i].ok)
+  const blocked = results.filter(r => r.blocked).length
+  console.log(`  ${streams.length - dead.length} kept (${blocked} possibly geo-blocked), ${dead.length} offline`)
+  if (dropDead) live = streams.filter(keep)
   // Fail rather than publish an empty playlist (e.g. the runner lost network), so the last good one stays live.
   if (streams.length && !live.length) throw new Error('Every stream failed the check; not publishing')
 }
@@ -47,7 +49,7 @@ const groupBy = (keyFn) => {
 }
 
 await write('index.m3u', entries)
-const byCountry = groupBy(e => [e.channel.country.toLowerCase()])
+const byCountry = groupBy(e => [e.channel.country.toLowerCase() || 'undefined'])
 for (const [k, list] of byCountry) await write(`countries/${k}.m3u`, list)
 const byCategory = groupBy(e => (e.channel.categories.length ? e.channel.categories : ['undefined']))
 for (const [k, list] of byCategory) await write(`categories/${k}.m3u`, list)
