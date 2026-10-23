@@ -164,3 +164,23 @@ test('Internet Archive import picks one MP4 per video and builds VOD entries', a
   await loadArchive(opts, { get, cachePath })
   assert.ok(!calls.some(u => u.includes('/metadata/')))
 })
+
+test('Internet Archive limit 0 pages through every item with the scrape API', async () => {
+  const { loadArchive } = await import('../scripts/archive.mjs')
+  const urls = []
+  const get = async url => {
+    urls.push(url)
+    if (url.includes('/metadata/')) return { files: [{ name: 'v.mp4', source: 'original' }] }
+    assert.ok(url.includes('/services/search/v1/scrape'))
+    return url.includes('cursor=abc')
+      ? { items: [{ identifier: 'b', title: 'B' }] }
+      : { items: [{ identifier: 'a', title: 'A' }], cursor: 'abc' }
+  }
+  const r = await loadArchive({ limit: 0, collections: [{ id: 'feature_films', name: 'Feature Films', type: 'movie' }] }, { get })
+  assert.deepEqual(r.channels.map(c => c.name), ['A', 'B'])
+  assert.ok(!urls.some(u => u.includes('advancedsearch')))
+
+  const late = await loadArchive({ limit: 0, maxMinutes: -1, collections: [{ id: 'f', name: 'F', type: 'movie' }] }, { get })
+  assert.equal(late.channels.length, 0)
+  assert.equal(late.deferred, 2)
+})

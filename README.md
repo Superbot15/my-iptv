@@ -126,11 +126,11 @@ In `config.json` under `archive`:
 
 | Setting | Effect |
 |---|---|
-| `"limit": 1000` | most-watched titles per collection; `0` = every item (Feature Films alone is tens of thousands; large playlists load slowly in some apps) |
+| `"limit": 0` | `0` = every item in each collection (the default here); a number = that many most-watched titles per collection (Feature Films alone is tens of thousands; large playlists load slowly in some apps) |
 | `"collections"` | which collections to import. Add any collection from archive.org/details/movies: its id is the last part of its URL, and `"type"` is `"movie"` (one entry per film) or `"tv"` (one entry per episode, grouped by show) |
 | `"enabled": false` | turn it off |
 
-File lists are cached between builds, so only new titles are looked up each day. Archive files skip the stream check.
+File lists are cached between builds, so only new titles are looked up each day. Each build spends at most `"maxMinutes"` (default 90) looking up titles; with `"limit": 0` the first full import is spread over a few daily builds, and the Sources table grows as it goes. Archive files skip the stream check.
 
 ## Rewind and recording
 

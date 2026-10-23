@@ -38,8 +38,8 @@
   ],
   "archive": {
     "enabled": true,
-    "limit": 1000,
-    "concurrency": 20,
+    "limit": 0,
+    "concurrency": 30,
     "collections": [
       {
         "id": "feature_films",

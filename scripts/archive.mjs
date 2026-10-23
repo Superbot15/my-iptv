@@ -11,17 +11,28 @@ async function fetchJson(url) {
   return res.json()
 }
 
-// Most-downloaded items first; limit 0 = every item in the collection.
+// limit > 0: that many most-downloaded items. limit 0: every item, via the scrape API,
+// because advancedsearch stops paging at 10,000 results.
 async function search(collection, limit, get) {
-  const rows = limit > 0 ? Math.min(limit, 10000) : 10000
-  const docs = []
-  for (let page = 1; ; page++) {
-    const q = encodeURIComponent(`collection:(${collection}) AND mediatype:(movies)`)
-    const r = await get(`${API}/advancedsearch.php?q=${q}&fl[]=identifier&fl[]=title&fl[]=year&sort[]=downloads+desc&rows=${rows}&page=${page}&output=json`)
-    docs.push(...r.response.docs)
-    if (r.response.docs.length < rows || (limit > 0 && docs.length >= limit)) break
+  const q = encodeURIComponent(`collection:(${collection}) AND mediatype:(movies)`)
+  if (limit > 0) {
+    const docs = []
+    const rows = Math.min(limit, 10000)
+    for (let page = 1; docs.length < limit; page++) {
+      const r = await get(`${API}/advancedsearch.php?q=${q}&fl[]=identifier&fl[]=title&fl[]=year&sort[]=downloads+desc&rows=${rows}&page=${page}&output=json`)
+      docs.push(...r.response.docs)
+      if (r.response.docs.length < rows) break
+    }
+    return docs.slice(0, limit)
   }
-  return limit > 0 ? docs.slice(0, limit) : docs
+  const docs = []
+  let cursor = ''
+  do {
+    const r = await get(`${API}/services/search/v1/scrape?q=${q}&fields=identifier,title,year&count=10000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
+    docs.push(...r.items)
+    cursor = r.cursor
+  } while (cursor)
+  return docs
 }
 
 // One playable file per video: the original if it's an MP4, else its MP4 derivative (h.264 over 512Kb).
@@ -43,6 +54,10 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
   const channels = []
   const streams = []
   const report = []
+  // Looking up every item can take hours on the first run. Stop new lookups at the deadline;
+  // the cache is kept, so the next build continues where this one stopped.
+  const deadline = Date.now() + (opts.maxMinutes ?? 90) * 60000
+  let deferred = 0
   for (const col of opts.collections) {
     let docs
     try {
@@ -53,6 +68,7 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
     }
     const items = await pool(docs, opts.concurrency || 20, async d => {
       if (!cache[d.identifier]) {
+        if (Date.now() > deadline) { deferred++; return null }
         try {
           const m = await get(`${API}/metadata/${encodeURIComponent(d.identifier)}`)
           cache[d.identifier] = pickVideos(m.files || []).map(f => ({ name: f.name, title: f.title || null }))
@@ -98,5 +114,6 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
     report.push({ name: `Archive: ${col.name}`, channels: items.filter(it => it?.videos.length).length, streams: added })
   }
   if (cachePath) await fs.writeFile(cachePath, JSON.stringify(cache))
-  return { channels, streams, report }
+  if (deferred) console.log(`Archive: ${deferred} items not looked up yet; the next build continues`)
+  return { channels, streams, report, deferred }
 }
