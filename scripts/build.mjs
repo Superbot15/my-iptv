@@ -62,10 +62,10 @@ if (args.has('--check')) {
     console.warn(`  dead (local): ${s.channel} ${s.url} — ${results[streams.indexOf(s)].reason}`)
   }
   const blocked = results.filter(r => r.blocked).length
-  console.log(`  ${streams.length - dead.length} kept (${blocked} possibly geo-blocked), ${dead.length} offline`)
+  console.log(`  ${toCheck.length - dead.length} kept (${blocked} possibly geo-blocked), ${dead.length} offline`)
   const reasons = {}
   for (const r of results) if (!r.ok) reasons[r.reason] = (reasons[r.reason] || 0) + 1
-  report.check = { checked: toCheck.length, kept: streams.length - dead.length, blocked, offline: dead.length, reasons }
+  report.check = { checked: toCheck.length, kept: toCheck.length - dead.length, blocked, offline: dead.length, reasons }
   offline = dead
   if (dropDead) live = streams.filter(keep)
   online = streams.filter(keep)
