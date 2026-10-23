@@ -1,0 +1,27 @@
+name: preview source
+
+# Actions tab -> "preview source" -> Run workflow. Paste a playlist URL to see what it would add.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Playlist URL (raw or normal github.com link)
+        required: true
+      name:
+        description: Short name for the source
+        required: false
+        default: New source
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/preview-source.mjs "$URL" "$NAME"
+        env:
+          URL: ${{ inputs.url }}
+          NAME: ${{ inputs.name }}

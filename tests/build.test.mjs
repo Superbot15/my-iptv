@@ -108,3 +108,9 @@ test('checkStream detects live, dead and bogus playlists', async () => {
   assert.deepEqual(await check('/slow.m3u8'), { ok: false, reason: 'timeout' })
   server.closeAllConnections(); server.close()
 })
+
+test('rawUrl turns github.com file links into raw links', async () => {
+  const { rawUrl } = await import('../scripts/lib.mjs')
+  assert.equal(rawUrl('https://github.com/Free-TV/IPTV/blob/master/playlist.m3u8'), 'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8')
+  assert.equal(rawUrl('https://i.mjh.nz/Plex/all.m3u8'), 'https://i.mjh.nz/Plex/all.m3u8')
+})

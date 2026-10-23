@@ -93,7 +93,9 @@ Rules:
 
 Any public M3U playlist can be merged in. The build downloads every source each day, removes duplicate links, and maps each channel to iptv-org's channel ID where it can (so logos, categories and the TV guide line up). If a source can't be downloaded, the build carries on without it and shows it as failed on the index page.
 
-**To add one:**
+**Full step-by-step guide: [docs/ADDING_SOURCES.md](docs/ADDING_SOURCES.md).** You can also preview any playlist first: **Actions → preview source → Run workflow**.
+
+**The short version:**
 
 1. Find the playlist file in the repo (usually `something.m3u` or `.m3u8`) and open it.
 2. Click **Raw** and copy that URL (`https://raw.githubusercontent.com/...`).

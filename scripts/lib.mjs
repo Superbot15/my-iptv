@@ -185,9 +185,12 @@ const countryFromGroup = g => groupKeys(g).map(k => COUNTRY_BY_NAME.get(k)).find
 const categoryFromGroup = g => groupKeys(g).map(k => CATEGORY_ALIASES[k] || k).find(k => CATEGORIES.has(k))
 
 // Loads another M3U playlist (URL or local path) listed under "sources" in config.json.
+// github.com/owner/repo/blob/branch/file -> raw.githubusercontent.com/owner/repo/branch/file
+export const rawUrl = url => url.replace(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|raw)\//, 'https://raw.githubusercontent.com/$1/$2/')
+
 export async function loadM3uSource(src) {
   const text = /^https?:/.test(src.url)
-    ? await fetch(src.url).then(r => { if (!r.ok) throw new Error(`${src.name}: HTTP ${r.status}`); return r.text() })
+    ? await fetch(rawUrl(src.url)).then(r => { if (!r.ok) throw new Error(`${src.name}: HTTP ${r.status}`); return r.text() })
     : await fs.readFile(path.resolve(ROOT, src.url), 'utf8')
   const channels = new Map()
   const streams = []

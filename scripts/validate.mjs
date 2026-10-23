@@ -1,5 +1,5 @@
 // Validates data/*.csv. Exits non-zero on errors so CI blocks bad pull requests.
-import { loadLocal } from './lib.mjs'
+import { loadLocal, loadConfig, rawUrl } from './lib.mjs'
 
 const { channels, streams } = await loadLocal()
 const errors = []
@@ -23,6 +23,18 @@ streams.forEach((s, i) => {
   if (urls.has(s.url)) errors.push(`${at}: duplicate url`)
   urls.add(s.url)
   if (s.quality && !/^\d{3,4}[pi]$/.test(s.quality)) errors.push(`${at}: quality should look like 720p`)
+})
+
+const config = await loadConfig()
+const names = new Set(), sourceUrls = new Set()
+;(config.sources || []).forEach((src, i) => {
+  const at = `config.json sources[${i}]`
+  if (!src.name) errors.push(`${at}: "name" is required`)
+  if (names.has(src.name)) errors.push(`${at}: duplicate name "${src.name}"`)
+  names.add(src.name)
+  if (!/^https?:\/\//.test(src.url || '')) errors.push(`${at}: "url" must start with https://`)
+  if (sourceUrls.has(rawUrl(src.url || ''))) errors.push(`${at}: this playlist is already listed`)
+  sourceUrls.add(rawUrl(src.url || ''))
 })
 
 if (errors.length) {
