@@ -134,3 +134,11 @@ ${checkHtml}
 `)
 
 console.log(`Wrote public/index.m3u with ${entries.length} streams (${byCountry.size} countries, ${byCategory.size} categories)`)
+
+// In GitHub Actions, also post the counts as annotations so they show on the run page.
+if (process.env.GITHUB_ACTIONS) {
+  const summary = report.sources.map(r => `${r.name}: ${r.error ? `failed (${r.error})` : `${r.channels} channels, ${r.streams} streams`}`)
+  if (c) summary.push(`Check: ${c.kept} of ${c.checked} live streams passed`)
+  summary.push(`Published: ${entries.length} entries`)
+  console.log(`::notice title=Playlist report::${summary.join('%0A')}`)
+}
