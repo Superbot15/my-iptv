@@ -254,7 +254,7 @@ const attr = v => String(v).replace(/"/g, "'")
 export function toM3u(entries, { epgUrl } = {}) {
   const lines = [epgUrl ? `#EXTM3U x-tvg-url="${attr(epgUrl)}"` : '#EXTM3U']
   for (const { channel: c, stream: s } of entries) {
-    const group = c.categories[0] ? c.categories[0][0].toUpperCase() + c.categories[0].slice(1) : 'Undefined'
+    const group = c.group || (c.categories[0] ? c.categories[0][0].toUpperCase() + c.categories[0].slice(1) : 'Undefined')
     const title = s.quality ? `${c.name} (${s.quality})` : c.name
     const attrs = [`tvg-id="${c.unlinked ? '' : attr(c.id)}"`]
     if (c.logo) attrs.push(`tvg-logo="${attr(c.logo)}"`)

@@ -118,6 +118,20 @@ Per-source options:
 
 Where to find more: the **Providers → IPTV** discussions linked from [awesome-iptv](https://github.com/iptv-org/awesome-iptv), and GitHub search for `extension:m3u` or `topic:iptv-playlist`. Stick to playlists of free, official streams; playlists of paid channels are usually unlicensed, and their links tend to die within days anyway.
 
+## On-demand movies and TV shows (Internet Archive)
+
+The build also imports public-domain films and classic TV from the [Internet Archive](https://archive.org): plain video files, so you can pick a title and pause, rewind and skip in any player, IPTV Smarters included. They're in `index.m3u` under groups like **Movies: Film Noir** and **TV: Dragnet**, and on their own in `movies.m3u` and `tv.m3u`.
+
+In `config.json` under `archive`:
+
+| Setting | Effect |
+|---|---|
+| `"limit": 1000` | most-watched titles per collection; `0` = every item (Feature Films alone is tens of thousands; large playlists load slowly in some apps) |
+| `"collections"` | which collections to import. Add any collection from archive.org/details/movies: its id is the last part of its URL, and `"type"` is `"movie"` (one entry per film) or `"tv"` (one entry per episode, grouped by show) |
+| `"enabled": false` | turn it off |
+
+File lists are cached between builds, so only new titles are looked up each day. Archive files skip the stream check.
+
 ## Rewind and recording
 
 Most free live streams keep only a few seconds of buffer, so there's nothing to rewind. Options:

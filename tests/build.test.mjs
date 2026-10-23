@@ -114,3 +114,53 @@ test('rawUrl turns github.com file links into raw links', async () => {
   assert.equal(rawUrl('https://github.com/Free-TV/IPTV/blob/master/playlist.m3u8'), 'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8')
   assert.equal(rawUrl('https://i.mjh.nz/Plex/all.m3u8'), 'https://i.mjh.nz/Plex/all.m3u8')
 })
+
+test('Internet Archive import picks one MP4 per video and builds VOD entries', async () => {
+  const { loadArchive, pickVideos } = await import('../scripts/archive.mjs')
+  assert.deepEqual(pickVideos([
+    { name: 'film.avi', source: 'original', format: 'AVI' },
+    { name: 'film_512kb.mp4', source: 'derivative', format: '512Kb MPEG4', original: 'film.avi' },
+    { name: 'film.mp4', source: 'derivative', format: 'h.264', original: 'film.avi' },
+    { name: 'film.ogv', source: 'derivative', format: 'Ogg Video', original: 'film.avi' }
+  ]).map(f => f.name), ['film.mp4'])
+
+  const meta = {
+    noir1: { files: [{ name: 'Detour.mp4', source: 'original', format: 'MPEG4' }] },
+    show1: { files: [
+      { name: 'ep10.mp4', source: 'original', format: 'h.264', title: 'Episode 10' },
+      { name: 'ep2.mp4', source: 'original', format: 'h.264', title: 'Episode 2' }] },
+    empty: { files: [{ name: 'x.pdf', source: 'original' }] }
+  }
+  const docs = { Film_Noir: [{ identifier: 'noir1', title: 'Detour', year: '1945' }, { identifier: 'empty', title: 'Nothing' }],
+    classic_tv: [{ identifier: 'show1', title: 'Dragnet' }] }
+  const calls = []
+  const get = async url => {
+    calls.push(url)
+    if (url.includes('/metadata/')) return meta[url.split('/').pop()]
+    const col = Object.keys(docs).find(c => url.includes(`collection%3A(${c})`))
+    if (!col) throw new Error('HTTP 404')
+    return { response: { docs: docs[col] } }
+  }
+  const opts = { limit: 10, collections: [
+    { id: 'Film_Noir', name: 'Film Noir', type: 'movie' },
+    { id: 'classic_tv', name: 'Classic TV', type: 'tv' },
+    { id: 'missing', name: 'Missing', type: 'movie' }] }
+  const r = await loadArchive(opts, { get })
+
+  assert.deepEqual(r.channels.map(c => [c.name, c.group]), [
+    ['Detour (1945)', 'Movies: Film Noir'],
+    ['Dragnet - Episode 2', 'TV: Dragnet'],
+    ['Dragnet - Episode 10', 'TV: Dragnet']])
+  assert.equal(r.streams[0].url, 'https://archive.org/download/noir1/Detour.mp4')
+  assert.ok(r.streams.every(s => s.skipCheck))
+  assert.equal(r.report.find(x => x.name === 'Archive: Missing').error, 'HTTP 404')
+  assert.match(toM3u([{ channel: r.channels[0], stream: r.streams[0] }]), /tvg-logo="https:\/\/archive.org\/services\/img\/noir1" group-title="Movies: Film Noir",Detour \(1945\)/)
+
+  // Cached items aren't fetched again.
+  const os = await import('node:os'), fsp = await import('node:fs/promises')
+  const cachePath = path.join(await fsp.mkdtemp(path.join(os.tmpdir(), 'iptv-')), 'archive.json')
+  await loadArchive(opts, { get, cachePath })
+  calls.length = 0
+  await loadArchive(opts, { get, cachePath })
+  assert.ok(!calls.some(u => u.includes('/metadata/')))
+})

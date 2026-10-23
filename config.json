@@ -36,6 +36,43 @@
       "epg": "https://i.mjh.nz/Roku/all.xml.gz"
     }
   ],
+  "archive": {
+    "enabled": true,
+    "limit": 1000,
+    "concurrency": 20,
+    "collections": [
+      {
+        "id": "feature_films",
+        "name": "Feature Films",
+        "type": "movie"
+      },
+      {
+        "id": "Film_Noir",
+        "name": "Film Noir",
+        "type": "movie"
+      },
+      {
+        "id": "SciFi_Horror",
+        "name": "Sci-Fi & Horror",
+        "type": "movie"
+      },
+      {
+        "id": "silent_films",
+        "name": "Silent Films",
+        "type": "movie"
+      },
+      {
+        "id": "classic_tv",
+        "name": "Classic TV",
+        "type": "tv"
+      },
+      {
+        "id": "classic_cartoons",
+        "name": "Classic Cartoons",
+        "type": "tv"
+      }
+    ]
+  },
   "check": {
     "timeoutMs": 10000,
     "concurrency": 60,

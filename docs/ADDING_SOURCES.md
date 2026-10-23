@@ -105,6 +105,17 @@ Committing starts the **update** action automatically.
 2. In the **Sources** table, your new source should show its channel and stream count. **"failed"** means the URL couldn't be downloaded; the rest of the playlist still published.
 3. On your TV/iPhone app, refresh the playlist (TiviMate: Settings → Playlists → your playlist → Update; most apps also refresh on restart).
 
+## Adding an Internet Archive collection
+
+1. Browse https://archive.org/details/movies and open a collection (for example "Classic TV").
+2. Its id is the last part of the URL: `archive.org/details/classic_tv` → `classic_tv`.
+3. In `config.json` → `archive` → `collections`, add:
+   ```json
+   { "id": "classic_tv", "name": "Classic TV", "type": "tv" }
+   ```
+   Use `"type": "movie"` for one entry per film, `"tv"` for one entry per episode grouped by show. Add `"limit": 0` inside the `{ }` to import every item in that collection.
+4. Commit. The Sources table shows it as **Archive: <name>** with the number of titles found; **0** usually means the id is misspelled (ids are case-sensitive).
+
 ## Removing or pausing a source
 
 In `config.json`, either delete its `{ ... }` entry (mind the commas), or add `"enabled": false` to keep it listed but not import it.

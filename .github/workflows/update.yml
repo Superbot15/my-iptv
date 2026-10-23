@@ -28,6 +28,12 @@ jobs:
           node-version: 22
       - run: npm run validate
       - run: npm test
+      # Internet Archive file lists, so daily builds don't re-fetch thousands of items.
+      - uses: actions/cache@v4
+        with:
+          path: .cache
+          key: archive-${{ github.run_id }}
+          restore-keys: archive-
       - run: npm run build:check
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
