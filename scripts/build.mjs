@@ -2,20 +2,41 @@
 // Usage: node scripts/build.mjs [--check] [--no-import]
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { ROOT, loadConfig, loadLocal, loadIptvOrg, merge, toM3u, checkStream, pool } from './lib.mjs'
+import { ROOT, loadConfig, loadLocal, loadIptvOrg, loadM3uSource, merge, toM3u, checkStream, pool } from './lib.mjs'
 
 const args = new Set(process.argv.slice(2))
 const config = await loadConfig()
 const out = path.join(ROOT, 'public')
 
+const report = { sources: [], check: null }
+const note = (name, r, error) => {
+  report.sources.push({ name, channels: r?.channels.length ?? 0, streams: r?.streams.length ?? 0, ...(error && { error }) })
+  console.log(error ? `${name}: skipped (${error})` : `${name}: ${r.channels.length} channels, ${r.streams.length} streams`)
+}
+
 const local = await loadLocal()
+note('local', local)
 let remote = { channels: [], streams: [] }
 if (config.import?.enabled && !args.has('--no-import')) {
   remote = await loadIptvOrg(config.import)
-  console.log(`iptv-org: ${remote.channels.length} channels, ${remote.streams.length} streams`)
+  note('iptv-org', remote)
 }
-const { channels, streams } = merge(local, remote)
+const extra = []
+for (const src of args.has('--no-import') ? [] : (config.sources || []).filter(s => s.enabled !== false)) {
+  // One unreachable source shouldn't block the whole build.
+  try {
+    const r = await loadM3uSource(src)
+    note(src.name, r)
+    extra.push(r)
+  } catch (e) {
+    note(src.name, null, e.message)
+  }
+}
+const { channels, streams } = merge(local, remote, ...extra)
+const epgUrl = [...new Set([config.epgUrl, ...extra.flatMap(r => r.epg)].filter(Boolean))].join(',')
 let live = streams
+let offline = []
+let online = null
 
 if (args.has('--check')) {
   const { timeoutMs = 8000, concurrency = 20, dropDead = true, keepBlocked = true } = config.check || {}
@@ -28,20 +49,26 @@ if (args.has('--check')) {
   }
   const blocked = results.filter(r => r.blocked).length
   console.log(`  ${streams.length - dead.length} kept (${blocked} possibly geo-blocked), ${dead.length} offline`)
+  const reasons = {}
+  for (const r of results) if (!r.ok) reasons[r.reason] = (reasons[r.reason] || 0) + 1
+  report.check = { checked: streams.length, kept: streams.length - dead.length, blocked, offline: dead.length, reasons }
+  offline = dead
   if (dropDead) live = streams.filter(keep)
+  online = streams.filter(keep)
   // Fail rather than publish an empty playlist (e.g. the runner lost network), so the last good one stays live.
-  if (streams.length && !live.length) throw new Error('Every stream failed the check; not publishing')
+  if (streams.length && !online.length) throw new Error('Every stream failed the check; not publishing')
 }
 
-const entries = live
+const toEntries = list => list
   .map(s => ({ channel: channels.get(s.channel), stream: s }))
   .sort((a, b) => a.channel.name.localeCompare(b.channel.name))
+const entries = toEntries(live)
 
 await fs.rm(out, { recursive: true, force: true })
 await fs.mkdir(path.join(out, 'countries'), { recursive: true })
 await fs.mkdir(path.join(out, 'categories'), { recursive: true })
 
-const write = (file, list) => fs.writeFile(path.join(out, file), toM3u(list, config))
+const write = (file, list) => fs.writeFile(path.join(out, file), toM3u(list, { epgUrl }))
 const groupBy = (keyFn) => {
   const m = new Map()
   for (const e of entries) for (const k of keyFn(e)) m.set(k, [...(m.get(k) || []), e])
@@ -49,6 +76,10 @@ const groupBy = (keyFn) => {
 }
 
 await write('index.m3u', entries)
+// Streams the checker removed. GitHub checks from the US, so some may still play where you are.
+await write('offline.m3u', toEntries(offline))
+// With dropDead off, index.m3u has everything and online.m3u only the streams that passed.
+if (online) await write('online.m3u', toEntries(online))
 const byCountry = groupBy(e => [e.channel.country.toLowerCase() || 'undefined'])
 for (const [k, list] of byCountry) await write(`countries/${k}.m3u`, list)
 const byCategory = groupBy(e => (e.channel.categories.length ? e.channel.categories : ['undefined']))
@@ -56,19 +87,30 @@ for (const [k, list] of byCategory) await write(`categories/${k}.m3u`, list)
 
 await fs.writeFile(path.join(out, 'channels.json'), JSON.stringify(
   entries.map(e => ({ ...e.channel, url: e.stream.url, quality: e.stream.quality })), null, 2))
+await fs.writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2))
 
 const link = (href, label, n) => `<li><a href="${href}">${label}</a> <small>${n} streams</small></li>`
+const esc = v => String(v).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
+const sourceRows = report.sources.map(s =>
+  `<tr><td>${esc(s.name)}</td><td>${s.error ? `<b>failed:</b> ${esc(s.error)}` : `${s.channels} channels, ${s.streams} streams`}</td></tr>`).join('')
+const c = report.check
+const checkHtml = c ? `<p>Checked ${c.checked} streams after removing duplicates: ${c.kept} passed (${c.blocked} of them possibly geo-blocked), ${c.offline} failed${config.check?.dropDead === false ? ' (kept in index.m3u anyway)' : ' and were removed'}.
+Failed streams are in <a href="offline.m3u">offline.m3u</a> (some may still play from your location); streams that passed are in <a href="online.m3u">online.m3u</a>.</p>
+<table>${Object.entries(c.reasons).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([r, n]) => `<tr><td>${esc(r)}</td><td>${n}</td></tr>`).join('')}</table>` : ''
 await fs.writeFile(path.join(out, 'index.html'), `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${config.title}</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 16px;color:#222;background:#fff}
 code{background:#f2f2f2;padding:2px 6px;border-radius:4px;word-break:break-all}small{color:#777}
+td{padding:2px 12px 2px 0;vertical-align:top}
 @media (prefers-color-scheme:dark){body{color:#ddd;background:#111}code{background:#222}a{color:#8ab4f8}}</style>
 </head><body>
 <h1>${config.title}</h1>
 <p>Main playlist (${entries.length} streams): <code id="main">index.m3u</code></p>
 <script>document.getElementById('main').textContent = new URL('index.m3u', location.href).href</script>
 <p>Updated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC</p>
+<h2>Sources</h2><table>${sourceRows}</table>
+${checkHtml}
 <h2>By country</h2><ul>${[...byCountry].map(([k, l]) => link(`countries/${k}.m3u`, k.toUpperCase(), l.length)).join('')}</ul>
 <h2>By category</h2><ul>${[...byCategory].map(([k, l]) => link(`categories/${k}.m3u`, k, l.length)).join('')}</ul>
 </body></html>

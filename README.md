@@ -54,13 +54,15 @@ Edit **`config.json`**:
     "enabled": true,             // false = use only your own CSV files
     "countries": [],             // ISO codes, e.g. ["IN", "US"]; [] = every country
     "categories": [],            // e.g. ["news", "kids", "movies"]; [] = all
-    "excludeNsfw": true,
+    "excludeNsfw": false,        // true = leave out adult channels
+    "includeClosed": true,       // also list channels iptv-org marks as shut down
     "includeUnlinked": true      // also add iptv-org streams with no channel entry (only when unfiltered)
   },
+  "sources": [ ... ],            // other M3U playlists to merge in, see below
   "check": {
     "timeoutMs": 10000, "concurrency": 60,
-    "dropDead": true,            // remove streams that fail the check
-    "keepBlocked": true          // keep 401/403 streams: GitHub checks from the US, so geo-blocked != dead
+    "dropDead": false,           // true = remove streams that fail the check from index.m3u
+    "keepBlocked": true          // treat 401/403 as passing: GitHub checks from the US, so geo-blocked != dead
   }
 }
 ```
@@ -87,7 +89,43 @@ Rules:
 - Use the same `id` as iptv-org when the channel exists there (search https://iptv-org.github.io). Your row then overrides their name and logo, and your stream is listed first.
 - `npm run validate` checks your files. CI runs it on every pull request.
 
-## 5. Run it locally (optional)
+## 5. Pull in channels from other repos
+
+Any public M3U playlist can be merged in. The build downloads every source each day, removes duplicate links, and maps each channel to iptv-org's channel ID where it can (so logos, categories and the TV guide line up). If a source can't be downloaded, the build carries on without it and shows it as failed on the index page.
+
+**To add one:**
+
+1. Find the playlist file in the repo (usually `something.m3u` or `.m3u8`) and open it.
+2. Click **Raw** and copy that URL (`https://raw.githubusercontent.com/...`).
+3. Add an entry to `sources` in `config.json` (on GitHub: open the file, click the pencil, commit):
+   ```json
+   { "name": "Some Repo", "url": "https://raw.githubusercontent.com/owner/repo/main/playlist.m3u" }
+   ```
+4. The update action runs on every commit. A few minutes later, check the **Sources** table on your index page to see how many channels it added.
+
+Per-source options:
+
+| Option | Effect |
+|---|---|
+| `"epg": "<url>"` | add this XMLTV guide to the playlist header |
+| `"epg": true` | use the guide URLs the source playlist itself declares |
+| `"country": "IN"` | country for entries that don't say |
+| `"skipGroups": ["VOD Italy"]` | leave out these `group-title` groups |
+| `"skipWebPages": true` | leave out YouTube/Twitch/etc. page links (most TV apps can't open them) |
+| `"enabled": false` | keep the entry but don't import it |
+
+Where to find more: the **Providers → IPTV** discussions linked from [awesome-iptv](https://github.com/iptv-org/awesome-iptv), and GitHub search for `extension:m3u` or `topic:iptv-playlist`. Stick to playlists of free, official streams; playlists of paid channels are usually unlicensed, and their links tend to die within days anyway.
+
+## Rewind and recording
+
+Most free live streams keep only a few seconds of buffer, so there's nothing to rewind. Options:
+
+- **Sources with catch-up:** if a source playlist has `catchup`, `catchup-source` or `catchup-days` tags, the build keeps them, and TiviMate, OTT Navigator and Kodi then show a rewind/archive option on those channels.
+- **Pause and rewind on the device:** Kodi with *PVR IPTV Simple Client*: in the add-on settings, set the stream to open with *inputstream.ffmpegdirect* in *timeshift* mode. Kodi then buffers to disk while you watch, so you can pause and rewind.
+- **Recording:** TiviMate Premium can record to a USB drive. [Jellyfin](https://jellyfin.org) (free) or Channels DVR can use this playlist as a tuner and record on a schedule.
+- **iPhone:** a few streams have a rewind window built in. VLC and Safari show a seek bar on those; on the rest, live is live.
+
+## 6. Run it locally (optional)
 
 Requires Node 20 or newer. There are no dependencies to install.
 
@@ -111,7 +149,10 @@ Every channel's `tvg-id` is its iptv-org id, which matches the guides that [iptv
 
 | File | Contents |
 |---|---|
-| `index.m3u` | every working stream |
+| `index.m3u` | every stream from every source |
+| `online.m3u` | only streams that passed the latest check |
+| `offline.m3u` | streams that failed the latest check (some may still play from your location) |
+| `report.json` | per-source counts and check results |
 | `countries/<code>.m3u` | e.g. `countries/in.m3u` |
 | `categories/<id>.m3u` | e.g. `categories/news.m3u` |
 | `channels.json` | machine-readable list |

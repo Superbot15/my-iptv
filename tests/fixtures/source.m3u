@@ -1,0 +1,14 @@
+#EXTM3U x-tvg-url="https://epg.example/a.xml, https://epg.example/b.xml"
+#EXTINF:-1 tvg-name="DD Saptagiri" tvg-logo="https://example.com/dds.png" tvg-id="DDSaptagiri.in" group-title="India",DD Saptagiri (720p)
+https://example.com/dd-saptagiri.m3u8
+#EXTINF:-1 tvg-id="NDTV24x7.in" group-title="India",NDTV, the "news" channel
+#EXTVLCOPT:http-user-agent=Mozilla/5.0 (x=1)
+https://example.com/ndtv-alt.m3u8
+#EXTINF:-1 group-title="Germany",Das Erste
+https://example.com/daserste.m3u8
+#EXTINF:-1 group-title="News",Some News
+https://example.com/news.m3u8
+#EXTINF:-1 tvg-id="TwitchOnly.us" group-title="News",Twitch Channel
+https://www.twitch.tv/somechannel
+#EXTINF:-1 tvg-id="Rewind.in" catchup="shift" catchup-days="7" group-title="India",Rewind TV
+https://example.com/rewind.m3u8|User-Agent=Kodi%2F20&Referer=https://r.example/

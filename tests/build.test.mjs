@@ -4,7 +4,7 @@ import http from 'node:http'
 import path from 'node:path'
 
 process.env.IPTV_ORG_API = path.join(import.meta.dirname, 'fixtures')
-const { parseCsv, loadLocal, loadIptvOrg, merge, toM3u, checkStream } = await import('../scripts/lib.mjs')
+const { parseCsv, parseM3u, loadLocal, loadIptvOrg, loadM3uSource, merge, toM3u, checkStream } = await import('../scripts/lib.mjs')
 
 test('parseCsv handles quotes, commas and CRLF', () => {
   const rows = parseCsv('a,b\r\n"x, y","say ""hi"""\r\n\r\n')
@@ -35,6 +35,44 @@ test('local data overrides remote and duplicate URLs are dropped', async () => {
   const nasa = streams.filter(s => s.channel === 'NASATV.us')
   assert.equal(nasa.length, 1)
   assert.equal(nasa[0].source, 'local')
+})
+
+test('parseM3u reads names with commas and VLC options', () => {
+  const [e] = parseM3u('#EXTM3U\n#EXTINF:-1 tvg-id="A.in" group-title="X",Name, with comma\n#EXTVLCOPT:http-user-agent=UA=1\nhttps://s/a\n')
+  assert.deepEqual(e, { name: 'Name, with comma', attrs: { 'tvg-id': 'A.in', 'group-title': 'X' }, user_agent: 'UA=1', referrer: null, url: 'https://s/a' })
+})
+
+test('M3U sources map countries, categories and merge after iptv-org', async () => {
+  const src = await loadM3uSource({ name: 'Test', url: 'tests/fixtures/source.m3u' })
+  const byName = n => src.channels.find(c => c.name === n)
+  assert.equal(byName('DD Saptagiri').country, 'IN')
+  assert.equal(byName('Das Erste').country, 'DE')
+  assert.ok(byName('Das Erste').unlinked)
+  assert.deepEqual(byName('Some News').categories, ['news'])
+  assert.equal(src.streams.find(s => s.channel === 'DDSaptagiri.in').quality, '720p')
+  assert.equal(src.streams.find(s => s.channel === 'NDTV24x7.in').user_agent, 'Mozilla/5.0 (x=1)')
+
+  const remote = await loadIptvOrg({ countries: [], categories: [], excludeNsfw: true })
+  const { channels, streams } = merge(await loadLocal(), remote, src)
+  assert.equal(channels.get('NDTV24x7.in').name, 'NDTV 24x7')
+  assert.deepEqual(streams.filter(s => s.channel === 'NDTV24x7.in').map(s => s.source), ['iptv-org', 'Test'])
+})
+
+test('M3U sources skip web pages and keep catch-up, Kodi headers and EPG', async () => {
+  const src = await loadM3uSource({ name: 'Test', url: 'tests/fixtures/source.m3u' })
+  assert.ok(src.streams.some(s => s.url.includes('twitch.tv')))
+  const skipping = await loadM3uSource({ name: 'Test', url: 'tests/fixtures/source.m3u', skipWebPages: true })
+  assert.ok(!skipping.streams.some(s => s.url.includes('twitch.tv')))
+  const rewind = src.streams.find(s => s.channel === 'Rewind.in')
+  assert.equal(rewind.url, 'https://example.com/rewind.m3u8')
+  assert.equal(rewind.user_agent, 'Kodi/20')
+  assert.equal(rewind.referrer, 'https://r.example/')
+  assert.deepEqual(rewind.catchup, { catchup: 'shift', 'catchup-days': '7' })
+  assert.match(toM3u([{ channel: src.channels.find(c => c.id === 'Rewind.in'), stream: rewind }]), /catchup="shift" catchup-days="7",Rewind TV/)
+
+  assert.deepEqual(src.epg, [])
+  const withEpg = await loadM3uSource({ name: 'Test', url: 'tests/fixtures/source.m3u', epg: true })
+  assert.deepEqual(withEpg.epg, ['https://epg.example/a.xml', 'https://epg.example/b.xml'])
 })
 
 test('toM3u writes EXTINF, headers and EPG url', () => {

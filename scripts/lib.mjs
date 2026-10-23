@@ -81,7 +81,7 @@ export async function loadIptvOrg(opts) {
   const categories = new Set(opts.categories)
   const picked = new Map()
   for (const c of channels) {
-    if (c.closed) continue
+    if (c.closed && !opts.includeClosed) continue
     if (opts.excludeNsfw && c.is_nsfw) continue
     if (countries.size && !countries.has(c.country)) continue
     if (categories.size && !(c.categories || []).some(x => categories.has(x))) continue
@@ -120,13 +120,124 @@ export async function loadIptvOrg(opts) {
   return { channels: [...picked.values()], streams: pickedStreams }
 }
 
+const parseAttrs = s => Object.fromEntries([...s.matchAll(/([\w-]+)="([^"]*)"/g)].map(m => [m[1], m[2]]))
+
+// Parses an extended M3U playlist into { name, attrs, url, user_agent, referrer } entries.
+// The playlist's own #EXTM3U attributes (e.g. its EPG url) are on entries.header.
+export function parseM3u(text) {
+  const entries = []
+  entries.header = {}
+  let cur = null
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (line.startsWith('#EXTM3U')) {
+      entries.header = parseAttrs(line)
+    } else if (line.startsWith('#EXTINF')) {
+      // The title starts at the first comma outside quoted attribute values.
+      let comma = -1, quoted = false
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '"') quoted = !quoted
+        else if (line[i] === ',' && !quoted) { comma = i; break }
+      }
+      const head = comma === -1 ? line : line.slice(0, comma)
+      cur = { name: comma === -1 ? '' : line.slice(comma + 1).trim(), attrs: parseAttrs(head), user_agent: null, referrer: null }
+    } else if (cur && line.startsWith('#EXTVLCOPT:')) {
+      const [k, ...v] = line.slice(11).split('=')
+      if (k === 'http-user-agent') cur.user_agent = v.join('=')
+      if (k === 'http-referrer') cur.referrer = v.join('=')
+    } else if (cur && line && !line.startsWith('#')) {
+      // Kodi-style headers: url|User-Agent=...&Referer=...
+      const [url, opts] = line.split('|')
+      for (const [k, v] of new URLSearchParams(opts || '')) {
+        if (/^user-agent$/i.test(k)) cur.user_agent = v
+        if (/^refer+er$/i.test(k)) cur.referrer = v
+      }
+      entries.push({ ...cur, url })
+      cur = null
+    }
+  }
+  return entries
+}
+
+// Links to web pages rather than streams; most TV players can't open these. Skipped only with "skipWebPages": true.
+const WEB_PAGE = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be|twitch\.tv|dailymotion\.com|facebook\.com)\//i
+const CATCHUP_ATTRS = ['catchup', 'catchup-source', 'catchup-days', 'timeshift']
+
+const CATEGORIES = new Set(['animation', 'auto', 'business', 'classic', 'comedy', 'cooking', 'culture', 'documentary', 'education', 'entertainment', 'family', 'general', 'kids', 'legislative', 'lifestyle', 'movies', 'music', 'news', 'outdoor', 'relax', 'religious', 'science', 'series', 'shop', 'sports', 'travel', 'weather'])
+
+// "india" -> "IN", built from the runtime's ICU region names.
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' })
+const COUNTRY_BY_NAME = new Map()
+for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
+  const code = String.fromCharCode(a, b)
+  try { const n = regionNames.of(code); if (n && n !== code) COUNTRY_BY_NAME.set(n.toLowerCase(), code) } catch {}
+}
+for (const [alias, code] of [['usa', 'US'], ['uk', 'GB'], ['united states', 'US'], ['united kingdom', 'GB'], ['korea', 'KR'], ['south korea', 'KR'],
+  ['russia', 'RU'], ['czech republic', 'CZ'], ['turkey', 'TR'], ['trinidad', 'TT'], ['bosnia', 'BA'], ['macedonia', 'MK'], ['vatican', 'VA']]) COUNTRY_BY_NAME.set(alias, code)
+const CATEGORY_ALIASES = { documentaries: 'documentary', film: 'movies', movie: 'movies', sport: 'sports', children: 'kids', 'kids & family': 'kids', religion: 'religious', shopping: 'shop' }
+
+// Playlists label groups like "VOD Italy", "日本 / Japan" or "Music (EN)"; reduce them to "italy", "japan", "music".
+const groupKeys = g => {
+  const base = g.toLowerCase().replace(/^vod\s+/, '').replace(/\s*\([^)]*\)\s*$/, '').trim()
+  return [base, ...base.split('/').map(p => p.trim())]
+}
+const countryFromGroup = g => groupKeys(g).map(k => COUNTRY_BY_NAME.get(k)).find(Boolean)
+const categoryFromGroup = g => groupKeys(g).map(k => CATEGORY_ALIASES[k] || k).find(k => CATEGORIES.has(k))
+
+// Loads another M3U playlist (URL or local path) listed under "sources" in config.json.
+export async function loadM3uSource(src) {
+  const text = /^https?:/.test(src.url)
+    ? await fetch(src.url).then(r => { if (!r.ok) throw new Error(`${src.name}: HTTP ${r.status}`); return r.text() })
+    : await fs.readFile(path.resolve(ROOT, src.url), 'utf8')
+  const channels = new Map()
+  const streams = []
+  const entries = parseM3u(text)
+  for (const e of entries) {
+    const name = e.attrs['tvg-name'] || e.name.replace(/\s*\((\d{3,4}[pi])\)\s*$/, '')
+    if (!name || (src.skipWebPages && WEB_PAGE.test(e.url)) || (src.skipGroups || []).includes(e.attrs['group-title'])) continue
+    const tvgId = e.attrs['tvg-id']
+    const id = tvgId || `~${name}`
+    const group = (e.attrs['group-title'] || '').toLowerCase()
+    if (!channels.has(id)) {
+      channels.set(id, {
+        id,
+        name,
+        // iptv-org style ids end in a country code (e.g. ZeeNews.in).
+        country: (tvgId?.match(/\.([a-z]{2})(@|$)/)?.[1]?.replace(/^uk$/, 'gb') || countryFromGroup(group) || src.country || '').toUpperCase(),
+        categories: [categoryFromGroup(group)].filter(Boolean),
+        languages: [],
+        logo: e.attrs['tvg-logo'] || null,
+        website: null,
+        unlinked: !tvgId,
+        source: src.name
+      })
+    }
+    streams.push({
+      channel: id,
+      url: e.url,
+      quality: e.name.match(/\((\d{3,4}[pi])\)/)?.[1] || null,
+      user_agent: e.user_agent,
+      referrer: e.referrer,
+      catchup: Object.fromEntries(CATCHUP_ATTRS.filter(a => e.attrs[a]).map(a => [a, e.attrs[a]])),
+      source: src.name
+    })
+  }
+  // "epg": "<url>" sets the guide; "epg": true reuses the guide the playlist itself declares.
+  const h = entries.header
+  const epg = (src.epg === true ? [h['x-tvg-url'], h['url-tvg']] : [src.epg])
+    .filter(v => typeof v === 'string').flatMap(s => s.split(',')).map(s => s.trim()).filter(Boolean)
+  return { channels: [...channels.values()], streams, epg }
+}
+
 // Local entries win: they override channel metadata and are listed first.
-export function merge(local, remote) {
-  const channels = new Map(remote.channels.map(c => [c.id, c]))
+// Among remotes, the first one to define a channel keeps its metadata.
+export function merge(local, ...remotes) {
+  const channels = new Map()
+  for (const r of remotes) for (const c of r.channels) if (!channels.has(c.id)) channels.set(c.id, c)
   for (const c of local.channels) channels.set(c.id, c)
   const seen = new Set()
   const streams = []
-  for (const s of [...local.streams, ...remote.streams]) {
+  for (const s of [...local.streams, ...remotes.flatMap(r => r.streams)]) {
     if (!channels.has(s.channel) || seen.has(s.url)) continue
     seen.add(s.url)
     streams.push(s)
@@ -136,6 +247,7 @@ export function merge(local, remote) {
 
 const attr = v => String(v).replace(/"/g, "'")
 
+// epgUrl may be a comma-separated list; TiviMate, OTT Navigator and Kodi accept that.
 export function toM3u(entries, { epgUrl } = {}) {
   const lines = [epgUrl ? `#EXTM3U x-tvg-url="${attr(epgUrl)}"` : '#EXTM3U']
   for (const { channel: c, stream: s } of entries) {
@@ -144,6 +256,7 @@ export function toM3u(entries, { epgUrl } = {}) {
     const attrs = [`tvg-id="${c.unlinked ? '' : attr(c.id)}"`]
     if (c.logo) attrs.push(`tvg-logo="${attr(c.logo)}"`)
     attrs.push(`group-title="${attr(group)}"`)
+    for (const [k, v] of Object.entries(s.catchup || {})) attrs.push(`${k}="${attr(v)}"`)
     lines.push(`#EXTINF:-1 ${attrs.join(' ')},${title}`)
     if (s.referrer) lines.push(`#EXTVLCOPT:http-referrer=${s.referrer}`)
     if (s.user_agent) lines.push(`#EXTVLCOPT:http-user-agent=${s.user_agent}`)
