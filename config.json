@@ -1,0 +1,15 @@
+{
+  "title": "My IPTV",
+  "epgUrl": "",
+  "import": {
+    "enabled": true,
+    "countries": ["IN", "US", "GB"],
+    "categories": [],
+    "excludeNsfw": true
+  },
+  "check": {
+    "timeoutMs": 8000,
+    "concurrency": 20,
+    "dropDead": true
+  }
+}

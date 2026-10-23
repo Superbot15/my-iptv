@@ -1,0 +1,7 @@
+[
+  {"id":"NDTV24x7.in","name":"NDTV 24x7","country":"IN","categories":["news"],"is_nsfw":false,"closed":null,"website":"https://ndtv.com"},
+  {"id":"OldChannel.in","name":"Old Channel","country":"IN","categories":["general"],"is_nsfw":false,"closed":"2020-01-01"},
+  {"id":"AdultTV.us","name":"Adult TV","country":"US","categories":["xxx"],"is_nsfw":true,"closed":null},
+  {"id":"FranceInfo.fr","name":"France Info","country":"FR","categories":["news"],"is_nsfw":false,"closed":null},
+  {"id":"NASATV.us","name":"NASA (remote name)","country":"US","categories":["science"],"is_nsfw":false,"closed":null}
+]

@@ -1,0 +1,8 @@
+[
+  {"channel":"NDTV24x7.in","feed":null,"url":"https://example.com/ndtv.m3u8","quality":"1080p","user_agent":"Mozilla/5.0","referrer":"https://ndtv.com/"},
+  {"channel":"OldChannel.in","url":"https://example.com/old.m3u8"},
+  {"channel":"AdultTV.us","url":"https://example.com/adult.m3u8"},
+  {"channel":"FranceInfo.fr","url":"https://example.com/fi.m3u8"},
+  {"channel":"NASATV.us","url":"https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8"},
+  {"channel":null,"title":"Orphan","url":"https://example.com/orphan.m3u8"}
+]
