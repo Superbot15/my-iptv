@@ -27,6 +27,8 @@ if (args.has('--check')) {
   }
   console.log(`  ${streams.length - dead.length} online, ${dead.length} offline`)
   if (dropDead) live = streams.filter((_, i) => results[i].ok)
+  // Fail rather than publish an empty playlist (e.g. the runner lost network), so the last good one stays live.
+  if (streams.length && !live.length) throw new Error('Every stream failed the check; not publishing')
 }
 
 const entries = live
