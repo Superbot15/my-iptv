@@ -19,7 +19,7 @@ async function search(collection, limit, get) {
     const docs = []
     const rows = Math.min(limit, 10000)
     for (let page = 1; docs.length < limit; page++) {
-      const r = await get(`${API}/advancedsearch.php?q=${q}&fl[]=identifier&fl[]=title&fl[]=year&fl[]=color&fl[]=language&sort[]=downloads+desc&rows=${rows}&page=${page}&output=json`)
+      const r = await get(`${API}/advancedsearch.php?q=${q}&fl[]=identifier&fl[]=title&fl[]=year&fl[]=color&fl[]=language&fl[]=subject&fl[]=description&sort[]=downloads+desc&rows=${rows}&page=${page}&output=json`)
       docs.push(...r.response.docs)
       if (r.response.docs.length < rows) break
     }
@@ -28,7 +28,7 @@ async function search(collection, limit, get) {
   const docs = []
   let cursor = ''
   do {
-    const r = await get(`${API}/services/search/v1/scrape?q=${q}&fields=identifier,title,year,color,language&count=10000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
+    const r = await get(`${API}/services/search/v1/scrape?q=${q}&fields=identifier,title,year,color,language,subject,description&count=10000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
     docs.push(...r.items)
     cursor = r.cursor
   } while (cursor)
@@ -79,6 +79,9 @@ export function blackAndWhite(doc, beforeYear) {
   const tag = [].concat(doc.color ?? []).join(' ').toLowerCase()
   if (/\bcolou?r\b/.test(tag) && !/b\s*&\s*w|black|mono/.test(tag)) return null
   if (/b\s*&\s*w|\bbw\b|black|mono|grayscale|greyscale/.test(tag)) return 'tag'
+  // Untagged items: look for black-and-white in the subject tags and description ("colorized" means colour).
+  const text = [].concat(doc.subject ?? [], doc.description ?? []).join(' ').toLowerCase()
+  if (!/coloriz|colouris/.test(text) && /\bblack[\s-]*(and|&)[\s-]*white\b|\bb\s*&\s*w\b|\bb\/w\b|\bmonochrome\b/.test(text)) return 'text'
   const year = releaseYear(doc)
   return beforeYear && year && year < beforeYear ? 'year' : null
 }
@@ -118,11 +121,11 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
     }
     const bw = opts.excludeBlackAndWhite
     const cutoff = col.type === 'tv' ? bw?.tvBefore : bw?.moviesBefore
-    const removed = { tag: 0, year: 0, old: 0, language: 0, series: 0 }
+    const removed = { tag: 0, text: 0, year: 0, old: 0, language: 0, series: 0 }
     if (bw) {
       docs = docs.filter(d => {
         const why = blackAndWhite(d, cutoff)
-        if (why) removed[why]++
+        if (why) { removed[why]++; removedItems.push({ collection: col.name, title: d.title, year: releaseYear(d), reason: `black-and-white (${why})` }) }
         return !why
       })
     }
@@ -211,7 +214,7 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
       })
     }
     report.push({ name: `Archive: ${col.name}`, channels: items.length, streams: added,
-      ...(bw && { removedBlackAndWhite: removed.tag + removed.year, removedByTag: removed.tag, removedByYear: removed.year }),
+      ...(bw && { removedBlackAndWhite: removed.tag + removed.text + removed.year, removedByTag: removed.tag, removedByText: removed.text, removedByYear: removed.year }),
       ...(opts.minYear && { removedOld: removed.old }),
       ...(opts.languages?.length && { removedLanguage: removed.language }),
       ...(opts.dropSeries && { removedSeries: removed.series }) })

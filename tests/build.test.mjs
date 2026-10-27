@@ -293,3 +293,11 @@ test('releaseYear prefers a year written in the title over the archive year', as
   assert.equal(releaseYear({ title: 'Movie' }, now), null)
   assert.equal(releaseYear({ title: 'Space 2099', year: '2012' }, now), 2012)
 })
+
+test('black-and-white is also read from subject tags and descriptions', async () => {
+  const { blackAndWhite } = await import('../scripts/archive.mjs')
+  assert.equal(blackAndWhite({ title: 'Old Film', year: '2015', description: 'A 1940s thriller in glorious black and white.' }, 1955), 'text')
+  assert.equal(blackAndWhite({ title: 'Old Film', year: '2015', subject: ['B&W', 'noir'] }, 1955), 'text')
+  assert.equal(blackAndWhite({ title: 'Colour Film', year: '2015', description: 'Colorized from the black and white original.' }, 1955), null)
+  assert.equal(blackAndWhite({ title: 'New Film', year: '2015', description: 'Shot in Mumbai.' }, 1955), null)
+})

@@ -39,7 +39,7 @@ if (config.archive?.enabled && !args.has('--no-import')) {
     { cachePath: path.join(ROOT, '.cache', 'archive.json') })
   for (const row of r.report) {
     report.sources.push(row)
-    const bw = (row.removedBlackAndWhite ? `, ${row.removedBlackAndWhite} black-and-white removed (${row.removedByTag} tagged, ${row.removedByYear} by year)` : '') +
+    const bw = (row.removedBlackAndWhite ? `, ${row.removedBlackAndWhite} black-and-white removed (${row.removedByTag} tagged, ${row.removedByText ?? 0} described, ${row.removedByYear} by year)` : '') +
       (row.removedOld ? `, ${row.removedOld} before ${config.archive.minYear} or undated removed` : '') +
       (row.removedLanguage ? `, ${row.removedLanguage} in other languages removed` : '') +
       (row.removedSeries ? `, ${row.removedSeries} series/repeated titles removed` : '')
@@ -160,7 +160,7 @@ console.log(`Wrote public/index.m3u with ${entries.length} streams (${byCountry.
 // In GitHub Actions, also post the counts as annotations so they show on the run page.
 if (process.env.GITHUB_ACTIONS) {
   const summary = report.sources.map(r => `${r.name}: ${r.error ? `failed (${r.error})` : `${r.channels} channels, ${r.streams} streams`}` +
-    (r.removedBlackAndWhite ? `, ${r.removedBlackAndWhite} black-and-white removed (${r.removedByTag} tagged, ${r.removedByYear} by year)` : '') +
+    (r.removedBlackAndWhite ? `, ${r.removedBlackAndWhite} black-and-white removed (${r.removedByTag} tagged, ${r.removedByText ?? 0} described, ${r.removedByYear} by year)` : '') +
     (r.removedOld ? `, ${r.removedOld} before ${config.archive.minYear} or undated removed` : '') +
     (r.removedLanguage ? `, ${r.removedLanguage} in other languages removed` : '') +
     (r.removedSeries ? `, ${r.removedSeries} series/repeated titles removed` : ''))
