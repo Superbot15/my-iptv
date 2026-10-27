@@ -67,11 +67,22 @@ async function getJson(name) {
 }
 
 export async function loadIptvOrg(opts) {
-  const [channels, streams, logos] = await Promise.all([
+  const [channels, streams, logos, feeds] = await Promise.all([
     getJson('channels.json'),
     getJson('streams.json'),
-    getJson('logos.json').catch(() => [])
+    getJson('logos.json').catch(() => []),
+    getJson('feeds.json').catch(() => [])
   ])
+  // iptv-org keeps languages on each feed of a channel; a channel speaks all of its feeds' languages.
+  const languagesById = new Map()
+  for (const f of feeds) {
+    const set = languagesById.get(f.channel) || new Set()
+    for (const l of f.languages || []) set.add(l)
+    languagesById.set(f.channel, set)
+  }
+  for (const c of channels) {
+    if (c.languages?.length) languagesById.set(c.id, new Set([...(languagesById.get(c.id) || []), ...c.languages]))
+  }
   const logoFor = new Map()
   for (const l of logos) {
     // Prefer the channel-level logo over feed-specific ones.
@@ -90,7 +101,7 @@ export async function loadIptvOrg(opts) {
       name: c.name,
       country: c.country,
       categories: c.categories || [],
-      languages: c.languages || [],
+      languages: [...(languagesById.get(c.id) || [])],
       logo: c.logo || logoFor.get(c.id) || null,
       website: c.website || null,
       source: 'iptv-org'
@@ -117,7 +128,23 @@ export async function loadIptvOrg(opts) {
       referrer: s.referrer || s.http_referrer || null,
       source: 'iptv-org'
     }))
-  return { channels: [...picked.values()], streams: pickedStreams }
+  return { channels: [...picked.values()], streams: pickedStreams, languagesById }
+}
+
+// English plus the 22 official languages of India, as ISO 639 codes (with common variants).
+export const ENGLISH_AND_INDIAN = ['eng', 'asm', 'ben', 'brx', 'doi', 'guj', 'hin', 'kan', 'kas', 'kok', 'gom', 'mai', 'mal', 'mni',
+  'mar', 'nep', 'npi', 'ori', 'ory', 'pan', 'san', 'sat', 'snd', 'tam', 'tel', 'urd']
+
+// Keeps a live channel unless its recorded country or language is outside the lists.
+// Channels with no country or no language recorded are kept.
+export function liveFilter({ countries = [], languages = [] } = {}) {
+  const cs = new Set(countries.map(c => c.toUpperCase()))
+  const ls = new Set(languages)
+  return c => {
+    if (cs.size && c.country && !cs.has(c.country.toUpperCase())) return false
+    if (ls.size && c.languages?.length && !c.languages.some(l => ls.has(l))) return false
+    return true
+  }
 }
 
 const parseAttrs = s => Object.fromEntries([...s.matchAll(/([\w-]+)="([^"]*)"/g)].map(m => [m[1], m[2]]))

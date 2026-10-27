@@ -9,6 +9,45 @@
     "includeUnlinked": true,
     "includeClosed": true
   },
+  "filter": {
+    "countries": [
+      "US",
+      "GB",
+      "CA",
+      "AU",
+      "NZ",
+      "IE",
+      "IN"
+    ],
+    "languages": [
+      "eng",
+      "asm",
+      "ben",
+      "brx",
+      "doi",
+      "guj",
+      "hin",
+      "kan",
+      "kas",
+      "kok",
+      "gom",
+      "mai",
+      "mal",
+      "mni",
+      "mar",
+      "nep",
+      "npi",
+      "ori",
+      "ory",
+      "pan",
+      "san",
+      "sat",
+      "snd",
+      "tam",
+      "tel",
+      "urd"
+    ]
+  },
   "sources": [
     {
       "name": "Free-TV",
@@ -45,16 +84,6 @@
         "id": "silent_films",
         "name": "Silent Films",
         "type": "movie"
-      },
-      {
-        "id": "classic_tv",
-        "name": "Classic TV",
-        "type": "tv"
-      },
-      {
-        "id": "classic_cartoons",
-        "name": "Classic Cartoons",
-        "type": "tv"
       }
     ]
   },

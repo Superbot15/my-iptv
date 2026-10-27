@@ -1,0 +1,6 @@
+[
+  {"channel":"NDTV24x7.in","id":"SD","languages":["eng"],"is_main":true},
+  {"channel":"FranceInfo.fr","id":"SD","languages":["fra"],"is_main":true},
+  {"channel":"NASATV.us","id":"Public","languages":["eng"],"is_main":true},
+  {"channel":"NASATV.us","id":"Spanish","languages":["spa"],"is_main":false}
+]

@@ -2,7 +2,7 @@
 // Usage: node scripts/build.mjs [--check] [--no-import]
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { ROOT, loadConfig, loadLocal, loadIptvOrg, loadM3uSource, merge, toM3u, checkStream, pool } from './lib.mjs'
+import { ROOT, loadConfig, loadLocal, loadIptvOrg, loadM3uSource, merge, toM3u, checkStream, pool, liveFilter } from './lib.mjs'
 import { loadArchive } from './archive.mjs'
 
 const args = new Set(process.argv.slice(2))
@@ -35,16 +35,32 @@ for (const src of args.has('--no-import') ? [] : (config.sources || []).filter(s
 }
 if (config.archive?.enabled && !args.has('--no-import')) {
   await fs.mkdir(path.join(ROOT, '.cache'), { recursive: true })
-  const r = await loadArchive(config.archive, { cachePath: path.join(ROOT, '.cache', 'archive.json') })
+  const r = await loadArchive({ ...config.archive, languages: config.archive.languages ?? config.filter?.languages },
+    { cachePath: path.join(ROOT, '.cache', 'archive.json') })
   for (const row of r.report) {
     report.sources.push(row)
     const bw = (row.removedBlackAndWhite ? `, ${row.removedBlackAndWhite} black-and-white removed (${row.removedByTag} tagged, ${row.removedByYear} by year)` : '') +
-      (row.removedOld ? `, ${row.removedOld} before ${config.archive.minYear} or undated removed` : '')
+      (row.removedOld ? `, ${row.removedOld} before ${config.archive.minYear} or undated removed` : '') +
+      (row.removedLanguage ? `, ${row.removedLanguage} in other languages removed` : '')
     console.log(row.error ? `${row.name}: skipped (${row.error})` : `${row.name}: ${row.channels} titles, ${row.streams} videos${bw}`)
   }
   extra.push(r)
 }
-const { channels, streams } = merge(local, remote, ...extra)
+const merged = merge(local, remote, ...extra)
+const { channels } = merged
+let { streams } = merged
+
+// Live TV filter ("filter" in config.json). Channels from other playlists borrow iptv-org's languages by id.
+if (config.filter) {
+  for (const c of channels.values()) {
+    if (!c.languages?.length && remote.languagesById?.has(c.id)) c.languages = [...remote.languagesById.get(c.id)]
+  }
+  const keep = liveFilter(config.filter)
+  const before = streams.length
+  streams = streams.filter(s => { const c = channels.get(s.channel); return c.vod || keep(c) })
+  report.filtered = before - streams.length
+  console.log(`Filter: removed ${report.filtered} live streams outside the chosen countries/languages`)
+}
 const epgUrl = [...new Set([config.epgUrl, ...extra.flatMap(r => r.epg)].filter(Boolean))].join(',')
 let live = streams
 let offline = []
@@ -131,6 +147,7 @@ td{padding:2px 12px 2px 0;vertical-align:top}
 <p>Updated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC</p>
 <p>On demand: <a href="movies.m3u">movies.m3u</a> (${entries.filter(e => e.channel.vod === 'movie').length}) and <a href="tv.m3u">tv.m3u</a> (${entries.filter(e => e.channel.vod === 'tv').length} episodes)</p>
 <h2>Sources</h2><table>${sourceRows}</table>
+${report.filtered ? `<p>${report.filtered} live streams outside the chosen countries and languages were left out.</p>` : ''}
 ${checkHtml}
 <h2>By country</h2><ul>${[...byCountry].map(([k, l]) => link(`countries/${k}.m3u`, k.toUpperCase(), l.length)).join('')}</ul>
 <h2>By category</h2><ul>${[...byCategory].map(([k, l]) => link(`categories/${k}.m3u`, k, l.length)).join('')}</ul>
@@ -143,7 +160,9 @@ console.log(`Wrote public/index.m3u with ${entries.length} streams (${byCountry.
 if (process.env.GITHUB_ACTIONS) {
   const summary = report.sources.map(r => `${r.name}: ${r.error ? `failed (${r.error})` : `${r.channels} channels, ${r.streams} streams`}` +
     (r.removedBlackAndWhite ? `, ${r.removedBlackAndWhite} black-and-white removed (${r.removedByTag} tagged, ${r.removedByYear} by year)` : '') +
-    (r.removedOld ? `, ${r.removedOld} before ${config.archive.minYear} or undated removed` : ''))
+    (r.removedOld ? `, ${r.removedOld} before ${config.archive.minYear} or undated removed` : '') +
+    (r.removedLanguage ? `, ${r.removedLanguage} in other languages removed` : ''))
+  if (report.filtered) summary.push(`Filter: ${report.filtered} live streams outside the chosen countries/languages removed`)
   if (c) summary.push(`Check: ${c.kept} of ${c.checked} live streams passed`)
   summary.push(`Published: ${entries.length} entries`)
   console.log(`::notice title=Playlist report::${summary.join('%0A')}`)

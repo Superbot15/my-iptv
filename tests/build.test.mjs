@@ -231,3 +231,34 @@ test('minYear leaves out older and undated archive titles', async () => {
   const keep = await loadArchive({ limit: 0, minYear: 1995, keepUndated: true, collections: [{ id: 'x', name: 'X', type: 'movie' }] }, { get })
   assert.deepEqual(keep.channels.map(c => c.name), ['New (1995)', 'Undated'])
 })
+
+test('live filter keeps chosen countries and languages, and channels with nothing recorded', async () => {
+  const { liveFilter, ENGLISH_AND_INDIAN } = await import('../scripts/lib.mjs')
+  const r = await loadIptvOrg({ countries: [], categories: [], excludeNsfw: true })
+  assert.deepEqual(r.channels.find(c => c.id === 'NASATV.us').languages.sort(), ['eng', 'spa'])
+  assert.deepEqual([...r.languagesById.get('FranceInfo.fr')], ['fra'])
+
+  const keep = liveFilter({ countries: ['US', 'GB', 'IN'], languages: ENGLISH_AND_INDIAN })
+  assert.equal(keep({ country: 'IN', languages: ['tel'] }), true)
+  assert.equal(keep({ country: 'US', languages: ['eng', 'spa'] }), true)
+  assert.equal(keep({ country: 'US', languages: ['spa'] }), false)
+  assert.equal(keep({ country: 'FR', languages: ['eng'] }), false)
+  assert.equal(keep({ country: '', languages: [] }), true)
+  assert.equal(keep({ country: 'GB', languages: [] }), true)
+  assert.equal(keep({ country: '', languages: ['fra'] }), false)
+})
+
+test('archive language filter keeps English, Indian and unrecorded languages', async () => {
+  const { loadArchive } = await import('../scripts/archive.mjs')
+  const { ENGLISH_AND_INDIAN } = await import('../scripts/lib.mjs')
+  const docs = [
+    { identifier: 'a', title: 'English Film', year: '2001', language: 'English' },
+    { identifier: 'b', title: 'Telugu Film', year: '2002', language: 'tel' },
+    { identifier: 'c', title: 'French Film', year: '2003', language: 'French' },
+    { identifier: 'd', title: 'No Language', year: '2004' }
+  ]
+  const get = async url => url.includes('/metadata/') ? { files: [{ name: 'v.mp4', source: 'original' }] } : { items: docs }
+  const r = await loadArchive({ limit: 0, languages: ENGLISH_AND_INDIAN, collections: [{ id: 'x', name: 'X', type: 'movie' }] }, { get })
+  assert.deepEqual(r.channels.map(c => c.name), ['English Film (2001)', 'Telugu Film (2002)', 'No Language (2004)'])
+  assert.equal(r.report[0].removedLanguage, 1)
+})

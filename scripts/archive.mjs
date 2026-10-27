@@ -19,7 +19,7 @@ async function search(collection, limit, get) {
     const docs = []
     const rows = Math.min(limit, 10000)
     for (let page = 1; docs.length < limit; page++) {
-      const r = await get(`${API}/advancedsearch.php?q=${q}&fl[]=identifier&fl[]=title&fl[]=year&fl[]=color&sort[]=downloads+desc&rows=${rows}&page=${page}&output=json`)
+      const r = await get(`${API}/advancedsearch.php?q=${q}&fl[]=identifier&fl[]=title&fl[]=year&fl[]=color&fl[]=language&sort[]=downloads+desc&rows=${rows}&page=${page}&output=json`)
       docs.push(...r.response.docs)
       if (r.response.docs.length < rows) break
     }
@@ -28,11 +28,28 @@ async function search(collection, limit, get) {
   const docs = []
   let cursor = ''
   do {
-    const r = await get(`${API}/services/search/v1/scrape?q=${q}&fields=identifier,title,year,color&count=10000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
+    const r = await get(`${API}/services/search/v1/scrape?q=${q}&fields=identifier,title,year,color,language&count=10000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
     docs.push(...r.items)
     cursor = r.cursor
   } while (cursor)
   return docs
+}
+
+// 2-letter codes and spellings the archive uses for the languages in ENGLISH_AND_INDIAN.
+const LANGUAGE_ALIASES = { en: 'eng', hi: 'hin', ta: 'tam', te: 'tel', ml: 'mal', kn: 'kan', bn: 'ben', bangla: 'ben',
+  mr: 'mar', gu: 'guj', pa: 'pan', or: 'ori', oriya: 'ori', odia: 'ori', as: 'asm', ur: 'urd', ne: 'nep', sa: 'san', sd: 'snd', ks: 'kas' }
+const NO_LANGUAGE = /^(zxx|und|mul|none|n\/a|unknown|no linguistic content|no language|silent|music)$/i
+const languageNames = new Intl.DisplayNames(['en'], { type: 'language' })
+
+// Whether an item's recorded language is outside the allowed ISO 639 codes. Items with no language are kept.
+export function otherLanguage(value, allowed) {
+  const parts = [].concat(value ?? []).flatMap(v => String(v).split(/[,;/&|]|\band\b/i)).map(p => p.trim().toLowerCase()).filter(Boolean)
+  const real = parts.filter(p => !NO_LANGUAGE.test(p))
+  if (!real.length) return false
+  const names = allowed.map(code => [code, (languageNames.of(code) || '').toLowerCase()])
+  const ok = p => allowed.includes(p) || allowed.includes(LANGUAGE_ALIASES[p]) ||
+    names.some(([, n]) => n && new RegExp(`\\b${n}\\b`).test(p))
+  return !real.some(ok)
 }
 
 // Why an item counts as black-and-white ('tag' or 'year'), or null to keep it.
@@ -78,12 +95,19 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
     }
     const bw = opts.excludeBlackAndWhite
     const cutoff = col.type === 'tv' ? bw?.tvBefore : bw?.moviesBefore
-    const removed = { tag: 0, year: 0, old: 0 }
+    const removed = { tag: 0, year: 0, old: 0, language: 0 }
     if (bw) {
       docs = docs.filter(d => {
         const why = blackAndWhite(d, cutoff)
         if (why) removed[why]++
         return !why
+      })
+    }
+    if (opts.languages?.length) {
+      docs = docs.filter(d => {
+        const other = otherLanguage(d.language, opts.languages)
+        if (other) removed.language++
+        return !other
       })
     }
     // "minYear": leave out titles released before it, and titles with no year unless "keepUndated".
@@ -142,7 +166,8 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
     }
     report.push({ name: `Archive: ${col.name}`, channels: items.filter(it => it?.videos.length).length, streams: added,
       ...(bw && { removedBlackAndWhite: removed.tag + removed.year, removedByTag: removed.tag, removedByYear: removed.year }),
-      ...(opts.minYear && { removedOld: removed.old }) })
+      ...(opts.minYear && { removedOld: removed.old }),
+      ...(opts.languages?.length && { removedLanguage: removed.language }) })
   }
   if (cachePath) await fs.writeFile(cachePath, JSON.stringify(cache))
   if (deferred) console.log(`Archive: ${deferred} items not looked up yet; the next build continues`)

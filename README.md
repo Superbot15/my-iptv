@@ -69,6 +69,19 @@ Edit **`config.json`**:
 
 Valid category ids are the ones iptv-org uses: `animation, auto, business, classic, comedy, cooking, culture, documentary, education, entertainment, family, general, kids, legislative, lifestyle, movies, music, news, outdoor, relax, religious, science, series, shop, sports, travel, weather`.
 
+### Live TV filter
+
+`"filter"` in `config.json` limits live channels (from every source) to chosen countries and languages:
+
+```json
+"filter": {
+  "countries": ["US", "GB", "CA", "AU", "NZ", "IE", "IN"],
+  "languages": ["eng", "hin", "tam", "tel", "mal", "kan", "ben", "mar", "guj", "pan", "..."]
+}
+```
+
+A channel is left out only when its recorded country, or every recorded language, is outside these lists; channels with no country or language recorded stay. Languages are ISO 639 codes (English plus the 22 official languages of India here) and come from iptv-org's database, so channels from other playlists get them when they use iptv-org ids. The same language list filters the Internet Archive movies. Delete `"filter"` to include every country and language.
+
 ## 4. Add your own channels
 
 `data/channels.csv`. Separate multiple values with `;`.
