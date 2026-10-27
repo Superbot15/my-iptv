@@ -184,3 +184,35 @@ test('Internet Archive limit 0 pages through every item with the scrape API', as
   assert.equal(late.channels.length, 0)
   assert.equal(late.deferred, 2)
 })
+
+test('black-and-white filter uses the colour tag first, then the year', async () => {
+  const { blackAndWhite, loadArchive } = await import('../scripts/archive.mjs')
+  assert.equal(blackAndWhite({ color: 'B&W', year: '1975' }, 1955), 'tag')
+  assert.equal(blackAndWhite({ color: 'black and white' }, 1955), 'tag')
+  assert.equal(blackAndWhite({ color: ['Color'], year: '1939' }, 1955), null)
+  assert.equal(blackAndWhite({ color: 'colour', year: '1950' }, 1955), null)
+  assert.equal(blackAndWhite({ year: '1948-05-01' }, 1955), 'year')
+  assert.equal(blackAndWhite({ year: '1962' }, 1955), null)
+  assert.equal(blackAndWhite({}, 1955), null)
+  assert.equal(blackAndWhite({ year: '1948' }, undefined), null)
+
+  const docs = [
+    { identifier: 'old', title: 'Old', year: '1940' },
+    { identifier: 'oldColor', title: 'Old Color', year: '1940', color: 'Color' },
+    { identifier: 'tagged', title: 'Tagged', year: '1970', color: 'b&w' },
+    { identifier: 'tv60', title: 'Sixties Show', year: '1962' },
+    { identifier: 'tv70', title: 'Seventies Show', year: '1972' }
+  ]
+  const lookedUp = []
+  const get = async url => {
+    if (url.includes('/metadata/')) { lookedUp.push(url.split('/').pop()); return { files: [{ name: 'v.mp4', source: 'original' }] } }
+    return { items: docs }
+  }
+  const opts = { limit: 0, excludeBlackAndWhite: { moviesBefore: 1955, tvBefore: 1966 }, collections: [
+    { id: 'm', name: 'Films', type: 'movie' }, { id: 't', name: 'Shows', type: 'tv' }] }
+  const r = await loadArchive(opts, { get })
+  assert.deepEqual(r.channels.filter(c => c.vod === 'movie').map(c => c.name), ['Old Color (1940)', 'Sixties Show (1962)', 'Seventies Show (1972)'])
+  assert.deepEqual(r.channels.filter(c => c.vod === 'tv').map(c => c.name), ['Old Color (1940)', 'Seventies Show (1972)'])
+  assert.deepEqual(r.report.map(x => [x.removedBlackAndWhite, x.removedByTag, x.removedByYear]), [[2, 1, 1], [3, 1, 2]])
+  assert.ok(!lookedUp.includes('old') && !lookedUp.includes('tagged'))
+})

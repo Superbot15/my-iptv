@@ -23,7 +23,9 @@ This guide covers adding an M3U playlist you find on GitHub (or anywhere else) t
 Open the file and skim the channel names and `group-title` values.
 
 **Good signs:**
-- Public broadcasters, news channels, local channels, FAST services (Pluto, Samsung TV Plus, Plex, Roku, Tubi)
+- Public broadcasters, news channels, local channels, free ad-supported channels
+
+(Playlists that repackage the whole Pluto TV, Samsung TV Plus or Plex lineup were taken down by a Warner Bros. DMCA notice in 2024; copies of them are usually the same takedown target.)
 - The repo explains where each stream comes from, or links to the broadcaster's site
 
 **Bad signs (skip these):**
@@ -72,8 +74,6 @@ At the bottom is the exact line to paste in the next step.
    ```json
    "sources": [
      { "name": "Free-TV", "url": "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8", "epg": true },
-     ...
-     { "name": "Roku", "url": "https://i.mjh.nz/Roku/all.m3u8", "epg": "https://i.mjh.nz/Roku/all.xml.gz" },
      { "name": "My New Source", "url": "https://raw.githubusercontent.com/owner/repo/main/playlist.m3u8" }
    ]
    ```

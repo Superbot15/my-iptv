@@ -14,32 +14,16 @@
       "name": "Free-TV",
       "url": "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8",
       "epg": true
-    },
-    {
-      "name": "Pluto TV",
-      "url": "https://i.mjh.nz/PlutoTV/all.m3u8",
-      "epg": "https://i.mjh.nz/PlutoTV/all.xml.gz"
-    },
-    {
-      "name": "Samsung TV Plus",
-      "url": "https://i.mjh.nz/SamsungTVPlus/all.m3u8",
-      "epg": "https://i.mjh.nz/SamsungTVPlus/all.xml.gz"
-    },
-    {
-      "name": "Plex",
-      "url": "https://i.mjh.nz/Plex/all.m3u8",
-      "epg": "https://i.mjh.nz/Plex/all.xml.gz"
-    },
-    {
-      "name": "Roku",
-      "url": "https://i.mjh.nz/Roku/all.m3u8",
-      "epg": "https://i.mjh.nz/Roku/all.xml.gz"
     }
   ],
   "archive": {
     "enabled": true,
     "limit": 0,
     "concurrency": 30,
+    "excludeBlackAndWhite": {
+      "moviesBefore": 1955,
+      "tvBefore": 1966
+    },
     "collections": [
       {
         "id": "feature_films",

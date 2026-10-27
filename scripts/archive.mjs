@@ -19,7 +19,7 @@ async function search(collection, limit, get) {
     const docs = []
     const rows = Math.min(limit, 10000)
     for (let page = 1; docs.length < limit; page++) {
-      const r = await get(`${API}/advancedsearch.php?q=${q}&fl[]=identifier&fl[]=title&fl[]=year&sort[]=downloads+desc&rows=${rows}&page=${page}&output=json`)
+      const r = await get(`${API}/advancedsearch.php?q=${q}&fl[]=identifier&fl[]=title&fl[]=year&fl[]=color&sort[]=downloads+desc&rows=${rows}&page=${page}&output=json`)
       docs.push(...r.response.docs)
       if (r.response.docs.length < rows) break
     }
@@ -28,11 +28,21 @@ async function search(collection, limit, get) {
   const docs = []
   let cursor = ''
   do {
-    const r = await get(`${API}/services/search/v1/scrape?q=${q}&fields=identifier,title,year&count=10000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
+    const r = await get(`${API}/services/search/v1/scrape?q=${q}&fields=identifier,title,year,color&count=10000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
     docs.push(...r.items)
     cursor = r.cursor
   } while (cursor)
   return docs
+}
+
+// Why an item counts as black-and-white ('tag' or 'year'), or null to keep it.
+// The archive's "color" field wins; untagged items before the cutoff year are assumed black-and-white.
+export function blackAndWhite(doc, beforeYear) {
+  const tag = [].concat(doc.color ?? []).join(' ').toLowerCase()
+  if (/\bcolou?r\b/.test(tag) && !/b\s*&\s*w|black|mono/.test(tag)) return null
+  if (/b\s*&\s*w|\bbw\b|black|mono|grayscale|greyscale/.test(tag)) return 'tag'
+  const year = parseInt(String(doc.year ?? '').slice(0, 4), 10)
+  return beforeYear && year && year < beforeYear ? 'year' : null
 }
 
 // One playable file per video: the original if it's an MP4, else its MP4 derivative (h.264 over 512Kb).
@@ -65,6 +75,16 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
     } catch (e) {
       report.push({ name: `Archive: ${col.name}`, channels: 0, streams: 0, error: e.message })
       continue
+    }
+    const bw = opts.excludeBlackAndWhite
+    const cutoff = col.type === 'tv' ? bw?.tvBefore : bw?.moviesBefore
+    const removed = { tag: 0, year: 0 }
+    if (bw) {
+      docs = docs.filter(d => {
+        const why = blackAndWhite(d, cutoff)
+        if (why) removed[why]++
+        return !why
+      })
     }
     const items = await pool(docs, opts.concurrency || 20, async d => {
       if (!cache[d.identifier]) {
@@ -111,7 +131,8 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
         added++
       })
     }
-    report.push({ name: `Archive: ${col.name}`, channels: items.filter(it => it?.videos.length).length, streams: added })
+    report.push({ name: `Archive: ${col.name}`, channels: items.filter(it => it?.videos.length).length, streams: added,
+      ...(bw && { removedBlackAndWhite: removed.tag + removed.year, removedByTag: removed.tag, removedByYear: removed.year }) })
   }
   if (cachePath) await fs.writeFile(cachePath, JSON.stringify(cache))
   if (deferred) console.log(`Archive: ${deferred} items not looked up yet; the next build continues`)
