@@ -39,7 +39,7 @@ if (config.archive?.enabled && !args.has('--no-import')) {
   for (const row of r.report) {
     report.sources.push(row)
     const bw = (row.removedBlackAndWhite ? `, ${row.removedBlackAndWhite} black-and-white removed (${row.removedByTag} tagged, ${row.removedByYear} by year)` : '') +
-      (row.removedOld ? `, ${row.removedOld} before ${config.archive.minYear} removed` : '')
+      (row.removedOld ? `, ${row.removedOld} before ${config.archive.minYear} or undated removed` : '')
     console.log(row.error ? `${row.name}: skipped (${row.error})` : `${row.name}: ${row.channels} titles, ${row.streams} videos${bw}`)
   }
   extra.push(r)
@@ -112,7 +112,7 @@ const esc = v => String(v).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
 const sourceRows = report.sources.map(s =>
   `<tr><td>${esc(s.name)}</td><td>${s.error ? `<b>failed:</b> ${esc(s.error)}` : `${s.channels} channels, ${s.streams} streams`}${
     s.removedBlackAndWhite ? ` <small>(${s.removedBlackAndWhite} black-and-white removed)</small>` : ''}${
-    s.removedOld ? ` <small>(${s.removedOld} before ${config.archive.minYear} removed)</small>` : ''}</td></tr>`).join('')
+    s.removedOld ? ` <small>(${s.removedOld} before ${config.archive.minYear} or undated removed)</small>` : ''}</td></tr>`).join('')
 const c = report.check
 const checkHtml = c ? `<p>Checked ${c.checked} streams after removing duplicates: ${c.kept} passed (${c.blocked} of them possibly geo-blocked), ${c.offline} failed${config.check?.dropDead === false ? ' (kept in index.m3u anyway)' : ' and were removed'}.
 Failed streams are in <a href="offline.m3u">offline.m3u</a> (some may still play from your location); streams that passed are in <a href="online.m3u">online.m3u</a>.</p>
@@ -143,7 +143,7 @@ console.log(`Wrote public/index.m3u with ${entries.length} streams (${byCountry.
 if (process.env.GITHUB_ACTIONS) {
   const summary = report.sources.map(r => `${r.name}: ${r.error ? `failed (${r.error})` : `${r.channels} channels, ${r.streams} streams`}` +
     (r.removedBlackAndWhite ? `, ${r.removedBlackAndWhite} black-and-white removed (${r.removedByTag} tagged, ${r.removedByYear} by year)` : '') +
-    (r.removedOld ? `, ${r.removedOld} before ${config.archive.minYear} removed` : ''))
+    (r.removedOld ? `, ${r.removedOld} before ${config.archive.minYear} or undated removed` : ''))
   if (c) summary.push(`Check: ${c.kept} of ${c.checked} live streams passed`)
   summary.push(`Published: ${entries.length} entries`)
   console.log(`::notice title=Playlist report::${summary.join('%0A')}`)

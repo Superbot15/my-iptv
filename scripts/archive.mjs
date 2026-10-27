@@ -86,11 +86,11 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
         return !why
       })
     }
-    // "minYear": leave out titles released before it. Items with no year are kept.
+    // "minYear": leave out titles released before it, and titles with no year unless "keepUndated".
     if (opts.minYear) {
       docs = docs.filter(d => {
         const year = parseInt(String(d.year ?? '').slice(0, 4), 10)
-        const old = year && year < opts.minYear
+        const old = year ? year < opts.minYear : !opts.keepUndated
         if (old) removed.old++
         return !old
       })
