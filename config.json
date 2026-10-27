@@ -59,8 +59,8 @@
     "enabled": true,
     "limit": 0,
     "concurrency": 30,
-    "minYear": 2008,
-    "dropSeries": true,
+    "minYear": 1995,
+    "dropSeries": false,
     "excludeBlackAndWhite": {
       "moviesBefore": 1955,
       "tvBefore": 1966

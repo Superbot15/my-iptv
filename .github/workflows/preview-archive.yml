@@ -1,0 +1,23 @@
+name: preview archive
+
+# Runs on pushes to preview/* branches: lists what the branch's config.json would remove
+# from the Internet Archive movies. Publishes nothing.
+on:
+  push:
+    branches: ['preview/**']
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache
+          key: archive-preview-${{ github.run_id }}
+          restore-keys: archive-
+      - run: node scripts/preview-archive.mjs --since 1995

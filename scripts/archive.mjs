@@ -97,6 +97,7 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
   const deadline = Date.now() + (opts.maxMinutes ?? 90) * 60000
   let deferred = 0
   const collected = []
+  const removedItems = []
   for (const col of opts.collections) {
     let docs
     try {
@@ -127,7 +128,7 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
       docs = docs.filter(d => {
         const year = parseInt(String(d.year ?? '').slice(0, 4), 10)
         const old = year ? year < opts.minYear : !opts.keepUndated
-        if (old) removed.old++
+        if (old) { removed.old++; if (year) removedItems.push({ collection: col.name, title: d.title, year, reason: 'year' }) }
         return !old
       })
     }
@@ -157,7 +158,10 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
     for (const c of collected) {
       c.items = c.items.filter(it => {
         const series = it.videos.length > 1 || count.get(baseTitle(it.doc.title)) > 1
-        if (series) c.removed.series++
+        if (series) {
+          c.removed.series++
+          removedItems.push({ collection: c.col.name, title: it.doc.title, year: it.doc.year, reason: it.videos.length > 1 ? `${it.videos.length} videos` : 'repeated title', base: baseTitle(it.doc.title) })
+        }
         return !series
       })
     }
@@ -203,5 +207,5 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
   }
   if (cachePath) await fs.writeFile(cachePath, JSON.stringify(cache))
   if (deferred) console.log(`Archive: ${deferred} items not looked up yet; the next build continues`)
-  return { channels, streams, report, deferred }
+  return { channels, streams, report, deferred, removedItems }
 }

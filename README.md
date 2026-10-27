@@ -142,9 +142,11 @@ In `config.json` under `archive`:
 | `"limit": 0` | `0` = every item in each collection (the default here); a number = that many most-watched titles per collection (Feature Films alone is tens of thousands; large playlists load slowly in some apps) |
 | `"collections"` | which collections to import. Add any collection from archive.org/details/movies: its id is the last part of its URL, and `"type"` is `"movie"` (one entry per film) or `"tv"` (one entry per episode, grouped by show) |
 | `"excludeBlackAndWhite"` | leaves out black-and-white titles: anything the archive tags as B&W, and untagged films before `moviesBefore` (1955) and shows before `tvBefore` (1966). Titles tagged colour are kept whatever their year. Delete the setting to include everything |
-| `"dropSeries": true` | leaves out TV shows filed as movies: items holding several videos, and titles that repeat once episode/part numbers are removed (all copies; this also catches sequels and multi-part films) |
-| `"minYear": 2008` | leaves out titles released before that year (2008 here), and titles with no year (add `"keepUndated": true` to keep those). Delete it to include older titles |
+| `"dropSeries": true` (off here) | leaves out TV shows filed as movies: items holding several videos, and titles that repeat once episode/part numbers are removed (all copies; this also catches sequels and multi-part films) |
+| `"minYear": 1995` | leaves out titles released before that year (1995 here), and titles with no year (add `"keepUndated": true` to keep those). Delete it to include older titles |
 | `"enabled": false` | turn it off |
+
+To see which titles a change would remove before applying it, put the change on a branch named `preview/<anything>` and push it: the **preview archive** action lists them and publishes nothing.
 
 File lists are cached between builds, so only new titles are looked up each day. Each build spends at most `"maxMinutes"` (default 90) looking up titles; with `"limit": 0` the first full import is spread over a few daily builds, and the Sources table grows as it goes. Archive files skip the stream check.
 
