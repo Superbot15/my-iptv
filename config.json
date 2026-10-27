@@ -20,6 +20,7 @@
     "enabled": true,
     "limit": 0,
     "concurrency": 30,
+    "minYear": 1995,
     "excludeBlackAndWhite": {
       "moviesBefore": 1955,
       "tvBefore": 1966

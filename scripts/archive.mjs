@@ -78,12 +78,21 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
     }
     const bw = opts.excludeBlackAndWhite
     const cutoff = col.type === 'tv' ? bw?.tvBefore : bw?.moviesBefore
-    const removed = { tag: 0, year: 0 }
+    const removed = { tag: 0, year: 0, old: 0 }
     if (bw) {
       docs = docs.filter(d => {
         const why = blackAndWhite(d, cutoff)
         if (why) removed[why]++
         return !why
+      })
+    }
+    // "minYear": leave out titles released before it. Items with no year are kept.
+    if (opts.minYear) {
+      docs = docs.filter(d => {
+        const year = parseInt(String(d.year ?? '').slice(0, 4), 10)
+        const old = year && year < opts.minYear
+        if (old) removed.old++
+        return !old
       })
     }
     const items = await pool(docs, opts.concurrency || 20, async d => {
@@ -132,7 +141,8 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
       })
     }
     report.push({ name: `Archive: ${col.name}`, channels: items.filter(it => it?.videos.length).length, streams: added,
-      ...(bw && { removedBlackAndWhite: removed.tag + removed.year, removedByTag: removed.tag, removedByYear: removed.year }) })
+      ...(bw && { removedBlackAndWhite: removed.tag + removed.year, removedByTag: removed.tag, removedByYear: removed.year }),
+      ...(opts.minYear && { removedOld: removed.old }) })
   }
   if (cachePath) await fs.writeFile(cachePath, JSON.stringify(cache))
   if (deferred) console.log(`Archive: ${deferred} items not looked up yet; the next build continues`)

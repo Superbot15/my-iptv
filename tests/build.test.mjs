@@ -216,3 +216,16 @@ test('black-and-white filter uses the colour tag first, then the year', async ()
   assert.deepEqual(r.report.map(x => [x.removedBlackAndWhite, x.removedByTag, x.removedByYear]), [[2, 1, 1], [3, 1, 2]])
   assert.ok(!lookedUp.includes('old') && !lookedUp.includes('tagged'))
 })
+
+test('minYear leaves out older archive titles and keeps undated ones', async () => {
+  const { loadArchive } = await import('../scripts/archive.mjs')
+  const docs = [
+    { identifier: 'a', title: 'Old', year: '1994' },
+    { identifier: 'b', title: 'New', year: '1995-06-01' },
+    { identifier: 'c', title: 'Undated' }
+  ]
+  const get = async url => url.includes('/metadata/') ? { files: [{ name: 'v.mp4', source: 'original' }] } : { items: docs }
+  const r = await loadArchive({ limit: 0, minYear: 1995, collections: [{ id: 'x', name: 'X', type: 'movie' }] }, { get })
+  assert.deepEqual(r.channels.map(c => c.name), ['New (1995)', 'Undated'])
+  assert.equal(r.report[0].removedOld, 1)
+})
