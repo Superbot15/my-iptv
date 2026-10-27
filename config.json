@@ -59,7 +59,7 @@
     "enabled": true,
     "limit": 0,
     "concurrency": 30,
-    "minYear": 2008,
+    "minYear": 2010,
     "dropSeries": true,
     "excludeBlackAndWhite": {
       "moviesBefore": 1955,

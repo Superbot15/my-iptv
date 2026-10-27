@@ -20,4 +20,7 @@ jobs:
           path: .cache
           key: archive-preview-${{ github.run_id }}
           restore-keys: archive-
-      - run: node scripts/preview-archive.mjs --since 1995
+      - run: node scripts/preview-archive.mjs --section kept
+      - run: node scripts/preview-archive.mjs --section year --since 2008
+      - run: node scripts/preview-archive.mjs --section bw --since 2008
+      - run: node scripts/preview-archive.mjs --section series --since 2008
