@@ -262,3 +262,23 @@ test('archive language filter keeps English, Indian and unrecorded languages', a
   assert.deepEqual(r.channels.map(c => c.name), ['English Film (2001)', 'Telugu Film (2002)', 'No Language (2004)'])
   assert.equal(r.report[0].removedLanguage, 1)
 })
+
+test('dropSeries removes multi-video items and titles repeated across collections', async () => {
+  const { loadArchive } = await import('../scripts/archive.mjs')
+  const docs = {
+    a: [{ identifier: 'film', title: 'Real Film', year: '2010' },
+        { identifier: 'ep1', title: 'Some Show Episode 1', year: '2011' },
+        { identifier: 'box', title: 'Box Set', year: '2012' }],
+    b: [{ identifier: 'ep2', title: 'Some Show - Ep. 2', year: '2011' },
+        { identifier: 'other', title: 'Other Film', year: '2013' }]
+  }
+  const files = { box: [{ name: '1.mp4', source: 'original' }, { name: '2.mp4', source: 'original' }] }
+  const get = async url => {
+    if (url.includes('/metadata/')) return { files: files[url.split('/').pop()] || [{ name: 'v.mp4', source: 'original' }] }
+    return { items: url.includes('collection%3A(a)') ? docs.a : docs.b }
+  }
+  const opts = { limit: 0, dropSeries: true, collections: [{ id: 'a', name: 'A', type: 'movie' }, { id: 'b', name: 'B', type: 'movie' }] }
+  const r = await loadArchive(opts, { get })
+  assert.deepEqual(r.channels.map(c => c.name), ['Real Film (2010)', 'Other Film (2013)'])
+  assert.deepEqual(r.report.map(x => x.removedSeries), [2, 1])
+})

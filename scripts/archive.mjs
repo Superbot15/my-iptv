@@ -52,6 +52,17 @@ export function otherLanguage(value, allowed) {
   return !real.some(ok)
 }
 
+// A title with episode/part/season markers, years and numbering removed, for spotting series.
+// "Dragnet Episode 12", "Dragnet - Ep. 3" and "Dragnet S01E02" all become "dragnet".
+export function baseTitle(title) {
+  return String(title || '').toLowerCase()
+    .replace(/\((?:19|20)\d\d\)|\[(?:19|20)\d\d\]/g, ' ')
+    .replace(/\b(s\d{1,2}\s*e\d{1,3}|\d{1,2}x\d{1,3}|season\s*\d+|series\s*\d+|episode\s*\d+|ep\.?\s*\d+|part\s*(\d+|[ivx]+|one|two|three)|pt\.?\s*\d+|chapter\s*\d+|vol(ume)?\.?\s*\d+|no\.?\s*\d+|#\s*\d+)\b/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/(\s\d{1,3})+\s*$/, '')
+    .trim()
+}
+
 // Why an item counts as black-and-white ('tag' or 'year'), or null to keep it.
 // The archive's "color" field wins; untagged items before the cutoff year are assumed black-and-white.
 export function blackAndWhite(doc, beforeYear) {
@@ -85,6 +96,7 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
   // the cache is kept, so the next build continues where this one stopped.
   const deadline = Date.now() + (opts.maxMinutes ?? 90) * 60000
   let deferred = 0
+  const collected = []
   for (const col of opts.collections) {
     let docs
     try {
@@ -95,7 +107,7 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
     }
     const bw = opts.excludeBlackAndWhite
     const cutoff = col.type === 'tv' ? bw?.tvBefore : bw?.moviesBefore
-    const removed = { tag: 0, year: 0, old: 0, language: 0 }
+    const removed = { tag: 0, year: 0, old: 0, language: 0, series: 0 }
     if (bw) {
       docs = docs.filter(d => {
         const why = blackAndWhite(d, cutoff)
@@ -131,10 +143,29 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
       }
       return { doc: d, videos: cache[d.identifier] }
     })
+    collected.push({ col, items: items.filter(it => it?.videos.length), removed, bw })
+  }
+
+  // "dropSeries": TV shows filed as movies. Items holding several videos, and titles that repeat
+  // once episode/part markers are stripped, are all left out.
+  if (opts.dropSeries) {
+    const count = new Map()
+    for (const { items } of collected) for (const it of items) {
+      const key = baseTitle(it.doc.title)
+      if (key) count.set(key, (count.get(key) || 0) + 1)
+    }
+    for (const c of collected) {
+      c.items = c.items.filter(it => {
+        const series = it.videos.length > 1 || count.get(baseTitle(it.doc.title)) > 1
+        if (series) c.removed.series++
+        return !series
+      })
+    }
+  }
+
+  for (const { col, items, removed, bw } of collected) {
     let added = 0
-    for (const it of items) {
-      if (!it?.videos.length) continue
-      const { doc: d, videos } = it
+    for (const { doc: d, videos } of items) {
       const title = String(d.title || d.identifier).trim()
       const year = d.year ? ` (${String(d.year).slice(0, 4)})` : ''
       const isTv = col.type === 'tv'
@@ -164,10 +195,11 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
         added++
       })
     }
-    report.push({ name: `Archive: ${col.name}`, channels: items.filter(it => it?.videos.length).length, streams: added,
+    report.push({ name: `Archive: ${col.name}`, channels: items.length, streams: added,
       ...(bw && { removedBlackAndWhite: removed.tag + removed.year, removedByTag: removed.tag, removedByYear: removed.year }),
       ...(opts.minYear && { removedOld: removed.old }),
-      ...(opts.languages?.length && { removedLanguage: removed.language }) })
+      ...(opts.languages?.length && { removedLanguage: removed.language }),
+      ...(opts.dropSeries && { removedSeries: removed.series }) })
   }
   if (cachePath) await fs.writeFile(cachePath, JSON.stringify(cache))
   if (deferred) console.log(`Archive: ${deferred} items not looked up yet; the next build continues`)

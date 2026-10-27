@@ -41,7 +41,8 @@ if (config.archive?.enabled && !args.has('--no-import')) {
     report.sources.push(row)
     const bw = (row.removedBlackAndWhite ? `, ${row.removedBlackAndWhite} black-and-white removed (${row.removedByTag} tagged, ${row.removedByYear} by year)` : '') +
       (row.removedOld ? `, ${row.removedOld} before ${config.archive.minYear} or undated removed` : '') +
-      (row.removedLanguage ? `, ${row.removedLanguage} in other languages removed` : '')
+      (row.removedLanguage ? `, ${row.removedLanguage} in other languages removed` : '') +
+      (row.removedSeries ? `, ${row.removedSeries} series/repeated titles removed` : '')
     console.log(row.error ? `${row.name}: skipped (${row.error})` : `${row.name}: ${row.channels} titles, ${row.streams} videos${bw}`)
   }
   extra.push(r)
@@ -161,7 +162,8 @@ if (process.env.GITHUB_ACTIONS) {
   const summary = report.sources.map(r => `${r.name}: ${r.error ? `failed (${r.error})` : `${r.channels} channels, ${r.streams} streams`}` +
     (r.removedBlackAndWhite ? `, ${r.removedBlackAndWhite} black-and-white removed (${r.removedByTag} tagged, ${r.removedByYear} by year)` : '') +
     (r.removedOld ? `, ${r.removedOld} before ${config.archive.minYear} or undated removed` : '') +
-    (r.removedLanguage ? `, ${r.removedLanguage} in other languages removed` : ''))
+    (r.removedLanguage ? `, ${r.removedLanguage} in other languages removed` : '') +
+    (r.removedSeries ? `, ${r.removedSeries} series/repeated titles removed` : ''))
   if (report.filtered) summary.push(`Filter: ${report.filtered} live streams outside the chosen countries/languages removed`)
   if (c) summary.push(`Check: ${c.kept} of ${c.checked} live streams passed`)
   summary.push(`Published: ${entries.length} entries`)
