@@ -52,6 +52,16 @@ export function otherLanguage(value, allowed) {
   return !real.some(ok)
 }
 
+// Release year: a year written in the title ("D.O.A. (1950)", "Snake 1978") wins over the archive's
+// year field, which is often the upload date.
+export function releaseYear(doc, now = new Date()) {
+  const max = now.getFullYear() + 1
+  const years = [...String(doc.title || '').matchAll(/(?<!\d)(19\d\d|20\d\d)(?!\d)/g)].map(m => +m[1]).filter(y => y >= 1890 && y <= max)
+  if (years.length) return Math.min(...years)
+  const y = parseInt(String(doc.year ?? '').slice(0, 4), 10)
+  return Number.isFinite(y) ? y : null
+}
+
 // A title with episode/part/season markers, years and numbering removed, for spotting series.
 // "Dragnet Episode 12", "Dragnet - Ep. 3" and "Dragnet S01E02" all become "dragnet".
 export function baseTitle(title) {
@@ -69,7 +79,7 @@ export function blackAndWhite(doc, beforeYear) {
   const tag = [].concat(doc.color ?? []).join(' ').toLowerCase()
   if (/\bcolou?r\b/.test(tag) && !/b\s*&\s*w|black|mono/.test(tag)) return null
   if (/b\s*&\s*w|\bbw\b|black|mono|grayscale|greyscale/.test(tag)) return 'tag'
-  const year = parseInt(String(doc.year ?? '').slice(0, 4), 10)
+  const year = releaseYear(doc)
   return beforeYear && year && year < beforeYear ? 'year' : null
 }
 
@@ -126,7 +136,7 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
     // "minYear": leave out titles released before it, and titles with no year unless "keepUndated".
     if (opts.minYear) {
       docs = docs.filter(d => {
-        const year = parseInt(String(d.year ?? '').slice(0, 4), 10)
+        const year = releaseYear(d)
         const old = year ? year < opts.minYear : !opts.keepUndated
         if (old) { removed.old++; if (year) removedItems.push({ collection: col.name, title: d.title, year, reason: 'year' }) }
         return !old
@@ -160,7 +170,7 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
         const series = it.videos.length > 1 || count.get(baseTitle(it.doc.title)) > 1
         if (series) {
           c.removed.series++
-          removedItems.push({ collection: c.col.name, title: it.doc.title, year: it.doc.year, reason: it.videos.length > 1 ? `${it.videos.length} videos` : 'repeated title', base: baseTitle(it.doc.title) })
+          removedItems.push({ collection: c.col.name, title: it.doc.title, year: releaseYear(it.doc), reason: it.videos.length > 1 ? `${it.videos.length} videos` : 'repeated title', base: baseTitle(it.doc.title) })
         }
         return !series
       })
@@ -171,7 +181,8 @@ export async function loadArchive(opts, { get = fetchJson, cachePath } = {}) {
     let added = 0
     for (const { doc: d, videos } of items) {
       const title = String(d.title || d.identifier).trim()
-      const year = d.year ? ` (${String(d.year).slice(0, 4)})` : ''
+      const ry = releaseYear(d)
+      const year = ry && !String(d.title || '').includes(String(ry)) ? ` (${ry})` : ''
       const isTv = col.type === 'tv'
       videos.forEach((v, i) => {
         const id = `~archive:${d.identifier}:${i}`

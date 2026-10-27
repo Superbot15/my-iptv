@@ -282,3 +282,14 @@ test('dropSeries removes multi-video items and titles repeated across collection
   assert.deepEqual(r.channels.map(c => c.name), ['Real Film (2010)', 'Other Film (2013)'])
   assert.deepEqual(r.report.map(x => x.removedSeries), [2, 1])
 })
+
+test('releaseYear prefers a year written in the title over the archive year', async () => {
+  const { releaseYear } = await import('../scripts/archive.mjs')
+  const now = new Date('2026-10-27')
+  assert.equal(releaseYear({ title: '1950. D.O.A.', year: '2023' }, now), 1950)
+  assert.equal(releaseYear({ title: 'A Face In The Crowd (1957) Andy Griffith', year: '2026' }, now), 1957)
+  assert.equal(releaseYear({ title: 'A Perfect Day', year: '2009' }, now), 2009)
+  assert.equal(releaseYear({ title: '10,000 Days', year: '2014' }, now), 2014)
+  assert.equal(releaseYear({ title: 'Movie' }, now), null)
+  assert.equal(releaseYear({ title: 'Space 2099', year: '2012' }, now), 2012)
+})
